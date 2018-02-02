@@ -44,11 +44,21 @@ int reactorLoop (BITFLAGS *f) {
     char command[80];
     
     while(true) {
-        command = ""; // clear old command
+        strcpy(command, ""); // clear old command
         printf("%s@%s :: %s =>", user, machine, path);
-        scanf("%79s", command);
+        fgets(command, 80, stdin);
+        
+        // remove newline
+        for (int i = 0; i < 80; i++) {
+            if (command[i] == '\n') {
+                command[i] = '\0';
+                break;
+            }
+        }
+        
+        // testing output
         if ( f->Flags.testing == true) {
-            printf("\n\n%s\n\n", command);
+            printf("%s\n", command);
         }
         
         // exit shell
