@@ -1,9 +1,11 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdbool.h> 
 
 // true and false
 #define true 1
 #define false 0
+
 
 // define union for flags
 typedef union
@@ -21,6 +23,13 @@ typedef union
 int initFlags (BITFLAGS *f);
 int reactorLoop (BITFLAGS *f);
 int setFlags (BITFLAGS *f, int argc, char **argv);
+char *trimExternalWhiteSpace(char *line);
+bool isSpecialChar(char ch);
+char **specialCharWhiteSpaceAdder(char *line); 
+char **parseWhitespace(char *line);
+int getBucketLength(char *line); 
+char **parseCommand(char *line); 
+char **parseArguments(char *line);
 
 int main (int argc, char **argv) {   
     
@@ -42,20 +51,22 @@ int reactorLoop (BITFLAGS *f) {
     char *machine = "Machine";
     char *path = "PWD";
     char command[80];
-    
+    int i = 0;
+	
     while(true) {
         strcpy(command, ""); // clear old command
         printf("%s@%s :: %s =>", user, machine, path);
         fgets(command, 80, stdin);
         
+		
         // remove newline
-        for (int i = 0; i < 80; i++) {
+        for (; i < 80; i++) {
             if (command[i] == '\n') {
                 command[i] = '\0';
                 break;
             }
         }
-        
+    
         // testing output
         if ( f->Flags.testing == true) {
             printf("%s\n", command);
@@ -66,6 +77,8 @@ int reactorLoop (BITFLAGS *f) {
             printf("Exiting Shell...\n");
             break;
         }
+		// parse the command 
+		else {parseCommand(command);}
     }
 }
 
@@ -99,3 +112,165 @@ int setFlags (BITFLAGS *f, int argc, char **argv) {
         }
     }
 }
+
+// handles leading and trailing white space
+char *trimExternalWhiteSpace(char *line)
+{
+	char *end;
+	
+	while(isspace((unsigned char)*line)) line++;
+	
+	if(*line == 0)
+		return line;
+	
+	end = line + strlen(line) - 1;
+	while(end > line && isspace((unsigned char)*end)) end--;
+	
+	*(end+1) = 0;
+	
+	return line;
+}
+
+// determines if char is special 
+bool isSpecialChar(char ch)
+{	
+	int i = 0;
+	char *SPECIAL_CHAR = "|><&$~";
+	for(; i < strlen(SPECIAL_CHAR); i++) {
+		if (ch == SPECIAL_CHAR[i]) {return true;}
+	}
+	return false;
+}
+
+/* adds space to special chars that need it*/
+char **specialCharWhiteSpaceAdjust(char* line)
+{
+	int i, j = 0;
+	char str[255];
+	for(i = 0; i < strlen(line); i++) {
+		if(isSpecialChar(line[i])) {
+			if(isspace((unsigned char) line[i-1]) && isspace((unsigned char) line[i+1])) {str[j++] = line[i];}			
+			if(!isspace((unsigned char) line[i-1])) {str[j++] = ' ';
+				if(isspace((unsigned char) line[i+1])) {str[j++] = line[i];}}
+			if(!isspace((unsigned char) line[i+1])) {str[j++] = line [i]; str[j++] = ' ';}
+		}
+		else {str[j++] = line[i];}
+	}
+	str[j] = '\0';
+	return trimExternalWhiteSpace(str);
+}	
+
+/* handles interior white space and special character spacing*/ 
+char **parseWhitespace(char* line)
+{
+	line = trimExternalWhiteSpace(line); 
+	int i, j = 0;
+	char str[255]; 
+	for(i = 0; i < strlen(line); i++) {
+		/* multiple white space check */
+		if(isspace((unsigned char) line[i])) {
+			if(isspace((unsigned char) line[i+1]) && !isspace((unsigned char) line[i-1])) {str[j++] = line[i];}
+			if(!isspace((unsigned char) line[i+1]) && !isspace((unsigned char) line[i-1])) {str[j++] = line[i];}
+		}
+		else {str[j++] = line[i];}
+	}	
+	str[j] = '\0';
+	return specialCharWhiteSpaceAdjust(str); 
+}
+
+//determine number of buckets by space calculation
+int getBucketLength(char *line)
+{
+	int i = 0;
+	int counter = 0;
+	
+	for(; line[i] != '\0'; i++) {
+		if (line[i] == ' ') {
+			counter++;
+		}
+	}
+	return counter * 2; 
+}
+
+//parses the command line into separate arguments 
+char **parseCommand(char *line) 
+{
+	char **args = (char**) malloc(sizeof(char**) * getBucketLength(line));
+	line = parseWhitespace(line);
+	printf("inside my parse: %s\n", line);	
+	args = parseArguments(line);
+	return NULL; 
+}	
+
+/*
+objective: want each index of bucket to point to a char* 
+
+however, the problem is that whenever the bucket is assigned to temp
+the temp variable is then memset. This clears the temp variable which means
+the bucket index that was set to temp now points to nothing. By commenting
+out memset, you will see that temp is stored at the bucket[0] index for a
+command like like: cd > test. Bucket will also store > at index 1, given this context.
+This is due to the way special characters are added to buckets. 
+
+The solution is to have each index of the bucket to point to portions of
+the line, e.g., in "cd > test", bucket[0] = "cd", bucket[1] = ">" and bucket[2] = "test"
+In order to do these the variable the bucket points to cannot be altered. 
+
+Also, for reasons I do not understand, deleting char* temp2[255] causes output errors
+*/ 
+char **parseArguments(char *line)
+{
+	printf("parse_arguments: %s\n", line);
+	int offset = 0;
+	char **bucket = (char **) malloc(sizeof(char **) * getBucketLength(line)); 
+	char temp[255];
+	char *temp2[255]; 
+	
+	int i = 0;
+	int j = 0;
+	int k = 0;
+		
+	/* traverse input string */ 
+	for(; i < strlen(line); i++) {
+		
+		/* special character */ 
+		if(isSpecialChar(line[i])) { 
+			bucket[k] = line[i];
+			printf("bucket[%i]: %c\n", k, bucket[k]);
+			k++;
+		}
+		
+		/* build string from other symbols */
+		if(!isspace((unsigned char) line[i]) && !isSpecialChar(line[i])) {
+			temp[j++] = line[i];
+		}
+
+		/* add completed strings to bucket */
+		if(i > 0)
+		{
+			if((isspace((unsigned char) line[i]) && !isSpecialChar((unsigned char) line[i-1])) ||
+				i+1 == strlen(line)) {
+				
+				temp[j] = '\0';
+				bucket[k] = temp;
+				printf("bucket[%i]: %s\n", k, bucket[k]); 
+				/*memset(temp, 0, sizeof(temp));*/
+				j = 0;
+				k++;
+			}
+		}	
+	}	
+	bucket[k] = '\0';	
+	/*
+	char *p = "cd";
+	char *b;
+	b = bucket[0];
+	printf("p: %s\n", p);
+	printf("b: %s\n", &(*bucket)[1]);
+	if(strncmp(b, p, 2) == 0) {printf("MATCH1\n");}
+	if(&(*bucket[1]) == '>') {printf("MATCH2\n");}
+	*/
+	return bucket;
+}
+
+
