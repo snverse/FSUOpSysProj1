@@ -1,16 +1,12 @@
 #include <stdio.h>
 #include <string.h>
-<<<<<<< HEAD
 #include <stdbool.h>
 #include <stdlib.h> 
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-=======
-#include <stdbool.h> 
 #include <ctype.h>
 #include <stdlib.h>
->>>>>>> 1fc80e490e6fffe915a533217a85455bf736aab0
 
 // true and false
 #define true 1
@@ -30,25 +26,6 @@ typedef union
 } BITFLAGS;
 
 // function definitions
-<<<<<<< HEAD
-int initFlags (BITFLAGS *f);
-int reactorLoop (BITFLAGS *f);
-int setFlags (BITFLAGS *f, int argc, char **argv);
-char *trimExternalWhiteSpace(char *line);
-bool isSpecialChar(char ch);
-char **specialCharWhiteSpaceAdder(char *line); 
-char **parseWhitespace(char *line);
-int getBucketLength(char *line); 
-char **parseCommand(char *line); 
-char **parseArguments(char *line);
-char **resolvePaths(char **args);
-char **executeArguments(char **args);
-int isCommand(char** args, int i);
-bool isDir(const char *path);
-bool isFile(const char *path);
-bool fileExist(const char *path);
-char *expandPath(char *path, int cmd_p);
-=======
 int     initFlags                   (BITFLAGS *f);
 int     reactorLoop                 (BITFLAGS *f);
 int     setFlags                    (BITFLAGS *f, int argc, char **argv);
@@ -64,7 +41,7 @@ char ** resolvePaths                (char **args);
 char ** executeArguments            (char **args);
 int     isCommand                   (char **args, int i);
 char *  expandPath                  (char *path, int cmd_p);
->>>>>>> 1fc80e490e6fffe915a533217a85455bf736aab0
+
 
 int main (int argc, char **argv) {   
     
@@ -101,6 +78,7 @@ int reactorLoop (BITFLAGS *f) {
                 break;
             }
         }
+
         // testing output
         if ( f->Flags.testing == true) {
             printf("%s\n", command);
@@ -148,7 +126,6 @@ int setFlags (BITFLAGS *f, int argc, char **argv) {
 }
 
 // handles leading and trailing white space
-char *trimExternalWhiteSpace(char *line)
 char * trimExternalWhiteSpace(char *line)
 {
 	char *end;
@@ -178,7 +155,6 @@ bool isSpecialChar(char ch)
 }
 
 /* adds space to special chars that need it*/
-char **specialCharWhiteSpaceAdjust(char* line)
 char * specialCharWhiteSpaceAdjust(char* line)
 {
 	int i, j = 0;
@@ -197,7 +173,6 @@ char * specialCharWhiteSpaceAdjust(char* line)
 }	
 
 /* handles interior white space and special character spacing*/ 
-char **parseWhitespace(char* line)
 char * parseWhitespace(char* line)
 {
 	line = trimExternalWhiteSpace(line); 
@@ -230,7 +205,6 @@ int getBucketLength(char *line)
 }
 
 //parses the command line into separate arguments 
-char **parseCommand(char *line) 
 char ** parseCommand(char *line) 
 {
 	char **args = (char**) malloc(sizeof(char**) * getBucketLength(line));
@@ -247,7 +221,6 @@ char ** parseCommand(char *line)
 //parses line into array of string arguments 
 //do not remove duplicate function delcarations 
 //or unused character arrays 
-char **parseArguments(char *line)
 char ** parseArguments(char *line)
 {
 	/*printf("parse_arguments: %s\n", line);*/
@@ -268,7 +241,6 @@ char ** parseArguments(char *line)
 		/* special character */ 
 		if(isSpecialChar(line[i])) { 
 			bucket[k] = malloc(sizeof(char*) * 1); 
-			bucket[k] = line[i];
 			*bucket[k] = line[i];
 			/*printf("bucket[%i]: %c\n", k, bucket[k]);*/
 			k++;
@@ -328,8 +300,8 @@ int isCommand(char **args, int i)
 	if(strcmp(args[i], "echo") == 0 ||
 		strcmp(args[i], "etime") == 0 ||
 		strcmp(args[i], "io") == 0 ||
+		strcmp(args[i], "ls") == 0) {printf("built-in command\n");return 3;} 
 			
-	else {/*printf("argument\n");*/return 0;}
 	else {printf("argument\n");return 0;}
 }
 
@@ -379,7 +351,6 @@ loop through args array and execute commands
 
 ~~~~~~~~~loop through char** args like list[][] in python~~~~~~~~~~~~
 */
-char **executeArguments(char **args)
 char ** executeArguments(char **args)
 {
 	//more goods
