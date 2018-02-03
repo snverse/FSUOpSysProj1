@@ -30,7 +30,10 @@ char **parseWhitespace(char *line);
 int getBucketLength(char *line); 
 char **parseCommand(char *line); 
 char **parseArguments(char *line);
+char **resolvePaths(char **args);
 char **executeArguments(char **args);
+int isCommand(char** args, int i);
+char *expandPath(char *path, int cmd_p);
 
 int main (int argc, char **argv) {   
     
@@ -200,11 +203,11 @@ char **parseCommand(char *line)
 	line = parseWhitespace(line);
 	/*printf("inside my parse: %s\n", line);*/	
 	args = parseArguments(line); 
-	executeArguments(args);
+	args = resolvePaths(args);
 	
+	/*executeArguments(args);*/
 	
-	
-	return NULL; 
+	return args; 
 }	
 
 //parses line into array of string arguments 
@@ -262,6 +265,56 @@ char **parseArguments(char *line)
 	return bucket;
 }
 
+char **resolvePaths(char **args)
+{
+	int i = 0;
+	for(; args[i] != NULL; i++) {
+		args[i] = expandPath(args[i], isCommand(args, i)); 
+	}
+	return args;
+}
+
+/*
+/returns 0 for argument, 
+1 for external command, 
+2 cd, 
+3 for other built-in commands 
+*/
+int isCommand(char **args, int i) 
+{
+	if(args[i] == '>' || 
+		args[i] == '<' ||
+		args[i] == '&' ||
+		args[i] == '|') {/*printf("external command\n");*/return 1;}
+	
+	if(strcmp(args[i], "cd") == 0) {/*printf("cd command\n");*/return 2;}
+	
+	if(strcmp(args[i], "echo") == 0 ||
+		strcmp(args[i], "etime") == 0 ||
+		strcmp(args[i], "io") == 0 ||
+		strcmp(args[i], "ls") == 0) {/*printf("built-in command\n")*/;return 3;} 
+			
+	else {/*printf("argument\n");*/return 0;}
+}
+
+/*
+returns expanded argument, does nothing in many cases (determined by is_command)
+*/
+char *expandPath(char *path, int cmd_p)
+{
+	//external commands  
+	if(cmd_p == 1) {}
+	//cd command
+	if(cmd_p == 2) {}
+	//for other built-ins
+	if(cmd_p == 3) {return path;}
+	//for arguments
+	if(cmd_p == 4) {}
+	
+	 
+	return NULL;
+}
+
 /*
 loop through args array and execute commands
 
@@ -269,9 +322,7 @@ loop through args array and execute commands
 */
 char **executeArguments(char **args)
 {
-	/*
-	THE GOODS 
-	*/
+	//more goods
 	
 	return NULL;
 }
