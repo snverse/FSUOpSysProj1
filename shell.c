@@ -1,6 +1,10 @@
 #include <stdio.h>
 #include <string.h>
-#include <stdbool.h> 
+#include <stdbool.h>
+#include <stdlib.h> 
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 // true and false
 #define true 1
@@ -33,6 +37,9 @@ char **parseArguments(char *line);
 char **resolvePaths(char **args);
 char **executeArguments(char **args);
 int isCommand(char** args, int i);
+bool isDir(const char *path);
+bool isFile(const char *path);
+bool fileExist(const char *path);
 char *expandPath(char *path, int cmd_p);
 
 int main (int argc, char **argv) {   
@@ -51,20 +58,20 @@ int main (int argc, char **argv) {
 
 int reactorLoop (BITFLAGS *f) {
     
-    char *user = "USER";
-    char *machine = "Machine";
-    char *path = "PWD";
-    char command[80];
+    char *user = getenv("USER");
+    char *machine = getenv("MACHINE");
+    char *path = getenv("PWD");
+    char command[255];
     int i = 0;
 	
     while(true) {
         strcpy(command, ""); // clear old command
         printf("%s@%s :: %s =>", user, machine, path);
-        fgets(command, 80, stdin);
+        fgets(command, 255, stdin);
         
 		
         // remove newline
-        for (; i < 80; i++) {
+        for (; i < 255; i++) {
             if (command[i] == '\n') {
                 command[i] = '\0';
                 break;
@@ -315,6 +322,29 @@ char *expandPath(char *path, int cmd_p)
 	return NULL;
 }
 
+//determines if the file exist 
+bool fileExist(const char *fname)
+{
+	if (access(fname, F_OK) != -1) {return true;}
+	else {return false;}
+}
+
+//determiens if path is to a file 
+bool isFile(const char *path)
+{
+	struct stat buf;
+	stat(path, &buf);
+	return S_ISREG(buf.st_mode); 
+}
+
+//determine if path is to a directory
+bool isDir(const char *path)
+{
+	struct stat buf;
+	stat(path, &buf);
+	return S_ISDIR(buf.st_mode); 
+}
+
 /*
 loop through args array and execute commands
 
@@ -323,7 +353,6 @@ loop through args array and execute commands
 char **executeArguments(char **args)
 {
 	//more goods
-	
 	return NULL;
 }
 
