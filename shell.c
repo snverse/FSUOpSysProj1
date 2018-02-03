@@ -70,7 +70,7 @@ int reactorLoop (BITFLAGS *f) {
                 break;
             }
         }
-    
+
         // testing output
         if ( f->Flags.testing == true) {
             printf("%s\n", command);
