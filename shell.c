@@ -30,6 +30,7 @@ char **parseWhitespace(char *line);
 int getBucketLength(char *line); 
 char **parseCommand(char *line); 
 char **parseArguments(char *line);
+char **executeArguments(char **args);
 
 int main (int argc, char **argv) {   
     
@@ -197,32 +198,25 @@ char **parseCommand(char *line)
 {
 	char **args = (char**) malloc(sizeof(char**) * getBucketLength(line));
 	line = parseWhitespace(line);
-	printf("inside my parse: %s\n", line);	
-	args = parseArguments(line);
+	/*printf("inside my parse: %s\n", line);*/	
+	args = parseArguments(line); 
+	executeArguments(args);
+	
+	
+	
 	return NULL; 
 }	
 
-/*
-objective: want each index of bucket to point to a char* 
-
-however, the problem is that whenever the bucket is assigned to temp
-the temp variable is then memset. This clears the temp variable which means
-the bucket index that was set to temp now points to nothing. By commenting
-out memset, you will see that temp is stored at the bucket[0] index for a
-command like like: cd > test. Bucket will also store > at index 1, given this context.
-This is due to the way special characters are added to buckets. 
-
-The solution is to have each index of the bucket to point to portions of
-the line, e.g., in "cd > test", bucket[0] = "cd", bucket[1] = ">" and bucket[2] = "test"
-In order to do these the variable the bucket points to cannot be altered. 
-
-Also, for reasons I do not understand, deleting char* temp2[255] causes output errors
-*/ 
+//parses line into array of string arguments 
+//do not remove duplicate function delcarations 
+//or unused character arrays 
 char **parseArguments(char *line)
 {
-	printf("parse_arguments: %s\n", line);
+	/*printf("parse_arguments: %s\n", line);*/
 	int offset = 0;
-	char **bucket = (char **) malloc(sizeof(char **) * getBucketLength(line)); 
+	int x = 0;
+	char **bucket = malloc(sizeof(char* ) * getBucketLength(line)); 
+	
 	char temp[255];
 	char *temp2[255]; 
 	
@@ -235,8 +229,9 @@ char **parseArguments(char *line)
 		
 		/* special character */ 
 		if(isSpecialChar(line[i])) { 
+			bucket[k] = malloc(sizeof(char*) * 1); 
 			bucket[k] = line[i];
-			printf("bucket[%i]: %c\n", k, bucket[k]);
+			/*printf("bucket[%i]: %c\n", k, bucket[k]);*/
 			k++;
 		}
 		
@@ -250,27 +245,35 @@ char **parseArguments(char *line)
 		{
 			if((isspace((unsigned char) line[i]) && !isSpecialChar((unsigned char) line[i-1])) ||
 				i+1 == strlen(line)) {
-				
 				temp[j] = '\0';
-				bucket[k] = temp;
-				printf("bucket[%i]: %s\n", k, bucket[k]); 
-				/*memset(temp, 0, sizeof(temp));*/
+				bucket[k] = malloc( sizeof(char*) * j);
+				
+				int x = 0;
+				for(; x < j; x++) {
+					bucket[k][x] = temp[x];
+				}
+				/* printf("bucket[%i]: %s\n", k, bucket[k]); */
 				j = 0;
 				k++;
 			}
 		}	
 	}	
-	bucket[k] = '\0';	
-	/*
-	char *p = "cd";
-	char *b;
-	b = bucket[0];
-	printf("p: %s\n", p);
-	printf("b: %s\n", &(*bucket)[1]);
-	if(strncmp(b, p, 2) == 0) {printf("MATCH1\n");}
-	if(&(*bucket[1]) == '>') {printf("MATCH2\n");}
-	*/
+	bucket[k] = '\0';		
 	return bucket;
+}
+
+/*
+loop through args array and execute commands
+
+~~~~~~~~~loop through char** args like list[][] in python~~~~~~~~~~~~
+*/
+char **executeArguments(char **args)
+{
+	/*
+	THE GOODS 
+	*/
+	
+	return NULL;
 }
 
 
