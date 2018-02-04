@@ -32,11 +32,11 @@ int     setFlags                    (BITFLAGS *f, int argc, char **argv);
 char *  trimExternalWhiteSpace      (char *line);
 bool    isSpecialChar               (char ch);
 char ** specialCharWhiteSpaceAdder  (char *line);
-char *  specialCharWhiteSpaceAdjust (char* line);
+char *  specialCharWhiteSpaceAdjust (char *line);
 char *  parseWhitespace             (char *line);
 int     getBucketLength             (char *line); 
-char ** parseCommand                (char *line); 
-char ** parseArguments              (char *line);
+char ** parseCommand                (char *line, BITFLAGS *f); 
+char ** parseArguments              (char *line, BITFLAGS *f);
 char ** resolvePaths                (char **args);
 char ** executeArguments            (char **args);
 int     isCommand                   (char **args, int i);
@@ -90,7 +90,7 @@ int reactorLoop (BITFLAGS *f) {
             break;
         }
 		// parse the command 
-		else {parseCommand(command);}
+		else {parseCommand(command, f);}
     }
 }
 
@@ -161,10 +161,19 @@ char * specialCharWhiteSpaceAdjust(char* line)
 	char str[255];
 	for(i = 0; i < strlen(line); i++) {
 		if(isSpecialChar(line[i])) {
-			if(isspace((unsigned char) line[i-1]) && isspace((unsigned char) line[i+1])) {str[j++] = line[i];}			
-			if(!isspace((unsigned char) line[i-1])) {str[j++] = ' ';
-				if(isspace((unsigned char) line[i+1])) {str[j++] = line[i];}}
-			if(!isspace((unsigned char) line[i+1])) {str[j++] = line [i]; str[j++] = ' ';}
+			if(isspace((unsigned char) line[i-1]) &&
+			    isspace((unsigned char) line[i+1])) 
+			{
+			    str[j++] = line[i];
+			}			
+			if(!isspace((unsigned char) line[i-1])) {
+			    str[j++] = ' ';
+				if(isspace((unsigned char) line[i+1])) {
+				    str[j++] = line[i];}
+				}
+			if(!isspace((unsigned char) line[i+1])) {
+			    str[j++] = line [i]; str[j++] = ' ';
+			}
 		}
 		else {str[j++] = line[i];}
 	}
@@ -181,8 +190,16 @@ char * parseWhitespace(char* line)
 	for(i = 0; i < strlen(line); i++) {
 		/* multiple white space check */
 		if(isspace((unsigned char) line[i])) {
-			if(isspace((unsigned char) line[i+1]) && !isspace((unsigned char) line[i-1])) {str[j++] = line[i];}
-			if(!isspace((unsigned char) line[i+1]) && !isspace((unsigned char) line[i-1])) {str[j++] = line[i];}
+			if(isspace((unsigned char) line[i+1]) &&
+			    !isspace((unsigned char) line[i-1]))
+			{
+			    str[j++] = line[i];
+			}
+			if(!isspace((unsigned char) line[i+1]) &&
+			    !isspace((unsigned char) line[i-1]))
+			{
+			    str[j++] = line[i];
+			}
 		}
 		else {str[j++] = line[i];}
 	}	
@@ -205,12 +222,14 @@ int getBucketLength(char *line)
 }
 
 //parses the command line into separate arguments 
-char ** parseCommand(char *line) 
+char ** parseCommand(char *line, BITFLAGS *f) 
 {
 	char **args = (char**) malloc(sizeof(char**) * getBucketLength(line));
 	line = parseWhitespace(line);
-	/*printf("inside my parse: %s\n", line);*/	
-	args = parseArguments(line); 
+	if ( f->Flags.testing == true) {
+	    printf("inside my parse: %s\n", line);	
+    }
+	args = parseArguments(line, f); 
 	args = resolvePaths(args);
 	
 	/*executeArguments(args);*/
@@ -221,9 +240,12 @@ char ** parseCommand(char *line)
 //parses line into array of string arguments 
 //do not remove duplicate function delcarations 
 //or unused character arrays 
-char ** parseArguments(char *line)
+char ** parseArguments(char *line, BITFLAGS *f)
 {
-	/*printf("parse_arguments: %s\n", line);*/
+    if ( f->Flags.testing == true) {
+	    printf("parse_arguments: %s\n", line);
+	}
+	
 	int offset = 0;
 	int x = 0;
 	char **bucket = malloc(sizeof(char* ) * getBucketLength(line)); 
@@ -254,8 +276,10 @@ char ** parseArguments(char *line)
 		/* add completed strings to bucket */
 		if(i > 0)
 		{
-			if((isspace((unsigned char) line[i]) && !isSpecialChar((unsigned char) line[i-1])) ||
-				i+1 == strlen(line)) {
+			if((isspace((unsigned char) line[i]) && 
+			    !isSpecialChar((unsigned char) line[i-1])) ||
+				i+1 == strlen(line)) 
+			{
 				temp[j] = '\0';
 				bucket[k] = malloc( sizeof(char*) * j);
 				
