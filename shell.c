@@ -34,15 +34,9 @@ bool    isSpecialChar               (char ch);
 char ** specialCharWhiteSpaceAdder  (char *line);
 char *  specialCharWhiteSpaceAdjust (char *line);
 char *  parseWhitespace             (char *line);
-<<<<<<< HEAD
 int     getBucketLength             (const char *line, const char ch); 
-char ** parseCommand                (char *line); 
-char ** parseArguments              (char *line);
-=======
-int     getBucketLength             (char *line); 
 char ** parseCommand                (char *line, BITFLAGS *f); 
 char ** parseArguments              (char *line, BITFLAGS *f);
->>>>>>> c726b60ff3712ccfcd7c0fa74800b177a057e883
 char ** resolvePaths                (char **args);
 char ** executeArguments            (char **args);
 int     isCommand                   (char **args, int i);
@@ -104,13 +98,8 @@ int reactorLoop (BITFLAGS *f) {
             break;
         }
 		// parse the command 
-<<<<<<< HEAD
-		else {parseCommand(command);}
-	}
-=======
 		else {parseCommand(command, f);}
     }
->>>>>>> c726b60ff3712ccfcd7c0fa74800b177a057e883
 }
 
 // sets default values for flags
