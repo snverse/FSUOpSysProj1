@@ -37,19 +37,19 @@ char *  parseWhitespace             (char *line);
 int     getBucketLength             (const char *line, const char ch); 
 char ** parseCommand                (char *line, BITFLAGS *f); 
 char ** parseArguments              (char *line, BITFLAGS *f);
-char ** resolvePaths                (char **args);
+char ** resolvePaths                (char **args, BITFLAGS *f);
 char ** executeArguments            (char **args);
 int     isCommand                   (char **args, int i);
-char *  expandPath                  (char *path, int cmd_p);
+char *  expandPath                  (char *path, int cmd_p, BITFLAGS *f);
 char * 	appendPath					(char *path, const char *append);
 char * 	getPathFromEnv				(const char *env);
 char ** split						(const char *path, const char ch);
-char * 	buildPath					(char *path, const char *envVar);
+char * 	buildPath					(char *path, const char *envVar, BITFLAGS *f);
 bool	contains 					(const char *path, const char ch);
 bool 	pathExist					(const char *path);
 bool 	isFile						(const char *path);
 bool 	isDir						(const char *path);
-
+bool 	isPath2BuiltIn				(const char *path);
 
 int main (int argc, char **argv) {   
     
@@ -238,7 +238,7 @@ char ** parseCommand(char *line, BITFLAGS *f)
 	    printf("inside my parse: %s\n", line);	
     }
 	args = parseArguments(line, f); 
-	args = resolvePaths(args);
+	args = resolvePaths(args, f);
 	
 	/*executeArguments(args);*/
 	
@@ -306,11 +306,14 @@ char ** parseArguments(char *line, BITFLAGS *f)
 }
 
 /* resolve path conflicts */
-char ** resolvePaths(char **args)
+char ** resolvePaths(char **args, BITFLAGS *f)
 {
+	 if ( f->Flags.testing == true) {
+		printf("Resolving Paths...\n"); 
+	 }
 	int i = 0;
 	for(; args[i] != NULL; i++) {
-		args[i] = expandPath(args[i], isCommand(args, i)); 
+		args[i] = expandPath(args[i], isCommand(args, i), f); 
 		printf("ARGS[%i]: %s\n", i, args[i]);
 	}
 	return args;
@@ -327,21 +330,24 @@ int isCommand(char **args, int i)
 	if(*args[i] == '>' || 
 		*args[i] == '<' ||
 		*args[i] == '&' ||
-		*args[i] == '|') {printf("external command\n");return 1;}
+		*args[i] == '|') {/*printf("external command\n");*/return 1;}
 	
-	if(strcmp(args[i], "cd") == 0) {printf("cd command\n");return 2;}
+	if(strcmp(args[i], "cd") == 0) {/*printf("cd command\n");*/return 2;}
 	
 	if(strcmp(args[i], "echo") == 0 ||
 		strcmp(args[i], "etime") == 0 ||
-		strcmp(args[i], "io") == 0 ||
-		strcmp(args[i], "ls") == 0) {printf("built-in command\n");return 3;} 
+		strcmp(args[i], "io") == 0) {/*printf("built-in command\n");*/return 3;} 
 			
-	else {printf("argument\n");return 0;}
+	else {/*printf("argument\n");*/return 0;}
 }
 
 //removes ~/ from path
-char * homePathBuilder(char * path)
+char * homePathBuilder(char * path, BITFLAGS *f)
 {
+	if ( f->Flags.testing == true) {
+		printf("Building Home Path...\n"); 
+	 }
+	
 	char expandedHomePath[255]; 
 	char * ehp = expandedHomePath;
 	
@@ -350,9 +356,9 @@ char * homePathBuilder(char * path)
 
 	strcpy(np, path+2);
 
-	printf("homePathBuilder path: %s\n", np);
+	//printf("homePathBuilder path: %s\n", np);
 	char * e = getPathFromEnv("HOME");
-	printf("getPathFromEnv(HOME): %s\n", e); 
+	//printf("getPathFromEnv(HOME): %s\n", e); 
 	
 	int i = 0;
 	for(; i < strlen(e); i++) {
@@ -362,20 +368,51 @@ char * homePathBuilder(char * path)
 	strcat(ehp, "/");
 	strcat(ehp, np);
 	
-	printf("EHP: %s\n", ehp);
+	//printf("EHP: %s\n", ehp);
 	
 	return ehp;
 }
 
 //removes ./ from line 
-char * currentDirPathBuilder(char * path)
+char * currentDirPathBuilder(char * path, BITFLAGS *f)
 {
-	char newPath[strlen(path)-2];
-	char * np = newPath;
-	strcpy(np, path+2); 
-	printf("currentDirPathBuilder: %s\n", np); 
-	newPath[strlen(path)-2] = '\0';
-	return np;
+	if ( f->Flags.testing == true) {
+		printf("Building path to current directory...\n"); 
+	 }
+		
+	if(strlen(path) == 2) {return getenv("PWD");}
+	
+	char *currPath = getenv("PWD");
+	
+	char newPath[255];
+	char *np = newPath; 
+	
+	char remainingPath[strlen(path)-1];
+	char *rp = remainingPath;
+	
+	int i = 0;
+	int j = 0;
+	
+	for(; i < strlen(currPath); i++) {
+		newPath[j++] = currPath[i];
+	}
+		
+	//printf("newPath: %s\n", np);	
+		
+	strcpy(rp, "/");
+	strcat(rp, path+2);
+	
+	//printf("remainingPath: %s\n", rp);
+	
+	
+	for(i =0; i < strlen(remainingPath); i++) {
+		newPath[j++] = remainingPath[i];
+	}
+	newPath[j] = '\0';
+	path = np;
+	
+	//printf("currentDirPathBuilder: %s\n", np);
+	return path;
 }
 
 //determines index of last "/" in path
@@ -392,167 +429,245 @@ int getParentIndex(const char * path)
 }
 
 //builds parent path 
-char * parentDirBuilder(char * path)
+char * parentDirBuilder(char * path, BITFLAGS *f)
 {
+	if ( f->Flags.testing == true) {
+		printf("building parent directory...\n"); 
+	 }
+	
 	char *currPath = getenv("PWD");
 	int nlength = getParentIndex(currPath);
-	printf("currPath: %s\n", currPath);
-	char newPath[strlen(path)-1];
-	char * np = newPath; 
-	strcpy(np, path+2); 
-	newPath[strlen(newPath)] = '\0';
-	printf("curr newPath: %s\n", np);
-	char parentPath[nlength + strlen(newPath)+1]; 
-	char *pp = parentPath; 
-	strncpy(pp, currPath, nlength);
-	strncat(pp, np, strlen(newPath)); 
-	printf("pp: %s\n", pp);
-	parentPath[strlen(parentPath)] = '\0'; 
-	return pp; 
-	/*
+	
 	char parentPath[255];
 	char * pp = parentPath;
 
 	int i = 0;
 	int j = 0;
+	
 	for(; i < nlength; i++) {
 		parentPath[j++] = currPath[i];
 	}		
-	for(i = 2; i < strlen(path); i++) {
-		parentPath[j++] = path[i];
+	
+	char newPath[strlen(path)-2];
+	char * np = newPath; 
+	strcpy(np, path+2); 
+	
+	for(i=0; i < strlen(newPath); i++) {
+		parentPath[j++] = newPath[i];
 	}
 	
 	parentPath[j] = '\0';
 	path = pp;
-	printf("ParentPath: %s\n", path); 
-	*/
+	//printf("ParentPath: %s\n", path); 
+	
 	return path; 
 }
 
 
-
-
 //removes $KEYWORD in path and replaces with corresponding path 
-char * envPathAmmend(char * path, const char * envVar) 
+char * envPathAmmend(char * path, char * envVar, BITFLAGS *f) 
 {
-	int i= strlen(envVar)+1; 
+	if ( f->Flags.testing == true) {
+		printf("ammending envionrmental path...\n"); 
+	 }
+	char *currPath = getenv(envVar); 
+	char envPath[255];
+	char *ep = envPath; 
+	int keywordSize = strlen(envVar) + 1; 
+	int i = 0;
 	int j = 0;
-	char envPath[strlen(path)-i+1];
-	char * eP = envPath;
 	
-	for(; i < strlen(path); i++) {envPath[j++] = path[i];}
+	//printf("currPathSize: %i\n", strlen(currPath)); 
 	
-	envPath[j] = '\0';
-	/*printf("envPath: %s\n", eP);*/ 
-	return eP; 
+	for(; i < strlen(currPath); i++) {
+		envPath[j++] = currPath[i]; 
+	}
+	//printf("currPath: %s\n", ep); 
+	
+	char newPath[strlen(path)-keywordSize];
+	char * np = newPath; 
+	strcpy(np, path+keywordSize); 
+	
+	//printf("envNewPAth: %s\n", np); 
+	
+	for(i = 0; i < strlen(newPath); i++) {
+		envPath[j++] = newPath[i];
+	}
+	
+	envPath[j] = '\0'; 
+	path = ep; 
+	//printf("EP: %s\n", path); 
+	
+	return path; 
 }
 
+/* finds built in path */
+char *expandBuiltIn(char *path, BITFLAGS *f) {
+	
+	if ( f->Flags.testing == true) {
+		printf("expanding built-ins...\n"); 
+	}
+	
+	char **prePath_split = split(getenv("PATH"), ':');
+	char temp[255];
+	char *t = temp; 
+	int i = 0;
+	int j = 0;
+	
+	
+	for(; prePath_split[i] != NULL; i++) {
+		
+		//printf("testing location: %s\n", prePath_split[i]); 
+		
+		memset(t, 0, 255*sizeof (char)); 
+		//copy prePath
+		for(j = 0; j < strlen(prePath_split[i]); j++) {
+			temp[j] = prePath_split[i][j];
+		} 
+		
+		//printf("Temp after prePath: %s\n", t);
+		
+		strcat(t, "/");
+		strcat(t, path);
+		
+		//printf("TEMP after path: %s\n", t);
+		
+		if(isPath2BuiltIn(t)) {
+			/*printf("TEMP PATH EXISTS1\n");*/ return t;
+		}
+		
+		memset(t, 0, 255*sizeof (char)); 
+	}
+	
+	return NULL;
+}
+
+bool isPath2BuiltIn(const char * path)
+{
+	struct stat sb; 
+	if(((path, &sb) >= 0) && (sb.st_mode > 0) && (S_IEXEC & sb.st_mode)) {
+		return true;
+	}
+	return false; 
+}
+
+
 //returns expanded argument, does nothing in many cases (determined by is_command)
-char * expandPath(char *path, int cmd_p)
+char * expandPath(char *path, int cmd_p, BITFLAGS *f)
 {	
+	if ( f->Flags.testing == true) {
+		printf("Expanding path...\n"); 
+	}
+	 
 	//external commands  
-	if(cmd_p == 1) {printf("expandPath: %s\n", path);}
+	if(cmd_p == 1) {/*printf("expandPath: %s\n", path);*/ return path;}
 	//cd command
 	if(cmd_p == 2) {
 		path = getenv("PWD");
-		printf("expandPath: %s\n", path);
+		return path; 
+		/*printf("expandPath: %s\n", path);*/
 	}
 	//for other built-ins
-	if(cmd_p == 3) {printf("expandPath: %s\n", path);}
+	if(cmd_p == 3) {
+		//printf("expandPath: %s\n", path);
+		path = expandBuiltIn(path, f);
+		return path; 
+	}
 	//for arguments
 	if(cmd_p == 0) {
 		
-		printf("Building path...\n");
+		//printf("Building path...\n");
 		char *envVar; 
 		if(contains(path, '$')) {
-			printf("$ detected\n");
-			printf("befor envPathAmmend: %s\n", path); 
+			//printf("$ detected\n");
+			//printf("befor envPathAmmend: %s\n", path); 
 			if(strncmp(path, "$PWD", 4) == 0) {	
-				path = envPathAmmend(path, "$PWD");
+				//path = envPathAmmend(path, "PWD");
 				envVar = "PWD";
 			}
 			if(strncmp(path, "$HOME", 5) == 0) {
-				path = envPathAmmend(path, "$HOME");
+				//path = envPathAmmend(path, "HOME");
 				envVar = "HOME";
 			}
 			if(strncmp(path, "$SHELL", 6) == 0) {
-				path = envPathAmmend(path, "$SHELL");
+				//path = envPathAmmend(path, "SHELL");
 				envVar = "SHELL"; 
 			}
 			
-			printf("envPathAmmend: %s\n", path);
-			path = buildPath(path, envVar); 
-			printf("BUILDED PATH: %s\n", path); 
-			
-			if(pathExist(path)) {
-				printf("WE DID IT\n");
-				return path;
-			}
-			printf("freshPath: %s\n", path);
+			path = envPathAmmend(path, envVar, f); 
+			//printf("envPathAmmend: %s\n", path);
+			if(pathExist(path)) {/*printf("The $ path is valid\n");*/ return path;}
+			else {return NULL;}
 		}
 		if(contains(path, '~')) {
-			printf("path: %s\n", path);
-			path = homePathBuilder(path);
-			printf("~path: %s\n", path);
-			if(pathExist(path)) {printf("This ~ path exists\n"); return path;}
+			//printf("path: %s\n", path);
+			path = homePathBuilder(path, f);
+			//printf("~path: %s\n", path);
+			if(pathExist(path)) {/*printf("This ~ path exists\n");*/ return path;}
+			else{return NULL;}
 		}
 		if(contains(path, '.')) { 
 			if(path[0] == '.' && path[1] == '.') {
-				printf("PATH BEFORE: %s\n", path);
-				char * b = parentDirBuilder(path);
-	
-				path = b;
-				printf("parentDir: %s\n", b); 
-				//printf("DOT DOT PATH: %s\n", b);
-				return path;
-				
-			
+				//printf("PATH BEFORE: %s\n", path);
+				path = parentDirBuilder(path, f);
+				//printf("parentDir: %s\n", path); 
+				if(pathExist(path)) {/*printf("This .. path exists\n");*/ return path;}
+				else {return NULL;}
 			}
 			//expand current working directoy
-			else {
-				char * c = currentDirPathBuilder(path);
+			if(path[0] == '.') {
+				char * c = currentDirPathBuilder(path, f);
 				path = c;
 				//printf("DOT PATH: %s\n", path);
+				if(pathExist(path)) {return path;}
+				else {return NULL;}
+				
+				
 			}
 		}
 		if(contains(path, '/')) {
 		
 			//printf("Entering buildPath function...\n"); 
-			path = buildPath(path, "PWD");
+			path = buildPath(path, "PWD", f);
 			
 			if(pathExist(path)) {
+				/*
 				printf("This other path exists\n");
 				if(isFile(path)) {printf("This is another valid file\n");}
 				if(isDir(path)) {printf("This is another valid directory\n");}
+				*/
+				return path; 
 			}
 			else{
-				printf("other path does not exist\n");
+				//printf("other path does not exist\n");
+				//return NULL;
 			}
 		}
 		//treat as either file or directory
 		else {
 			
-			char *p = malloc(sizeof(char* ) * strlen(getenv("PWD")));
-			p = getPathFromEnv("PWD");
-			
+			char *p = getPathFromEnv("PWD");
 			path = appendPath(p, path);
 			
 			if(pathExist(path)) {
+				/*
 				printf("This path exists\n");
 				if(isFile(path)) {printf("This is a valid file\n");}
 				if(isDir(path)) {printf("This is a valid directory\n");}
+				*/
+				return path; 
 			}
 			else {
-				printf("path does not exist\n");
+				//printf("path does not exist\n");
+				//return NULL;
 			}
 		}
 	}
 	
-	 
 	return path;
 }
 
-
+//returns environment path
 char * getPathFromEnv(const char * env)
 {
 	char *p = malloc(sizeof(char* ) * strlen(getenv(env)));
@@ -588,11 +703,18 @@ char * appendPath(char * path, char const * append)
 }
 
 //gets value from environmental variable and tests each with passed in path
-char * buildPath(char * path, const char * envVar)
+char * buildPath(char * path, const char * envVar, BITFLAGS *f)
 {
-	//printf("Inside buildPath....\n");
+	if ( f->Flags.testing == true) {
+		printf("Building Path...\n"); 
+	 }
+	
 	int i = 0;
 	char newPath[255];
+	
+	memset(newPath, 0, 255*sizeof(char));
+	
+	
 	char *np = newPath;
 	
 	if(strcmp(envVar, "NAH") != 0) {stpcpy(newPath, getPathFromEnv(envVar));}
@@ -613,10 +735,10 @@ char * buildPath(char * path, const char * envVar)
 		//printf("newPath after: %s\n", newPath); 
 		if (!pathExist(newPath)) {/*printf("Path does not exist\n");*/ return NULL;}			
 	}
-	printf("SIZE: %i\n", strlen(newPath) + getBucketLength(path, '/'));
-	//newPath[envPathSize] = '\0';
-	printf("Completed building path...\n");
-	printf("NEW PATH: %s\n", np);
+	//printf("SIZE: %i\n", strlen(newPath) + getBucketLength(path, '/'));
+	
+	//printf("Completed building path...\n");
+	//printf("NEW PATH: %s\n", np);
 	return np; 
 }
 
