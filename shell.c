@@ -38,7 +38,7 @@ int     getBucketLength             (const char *line, const char ch);
 char ** parseCommand                (char *line, BITFLAGS *f); 
 char ** parseArguments              (char *line, BITFLAGS *f);
 char ** resolvePaths                (char **args, BITFLAGS *f);
-char ** executeArguments            (char **args);
+char ** executeCommands             (char **args, BITFLAGS *f);
 int     isCommand                   (char **args, int i);
 char *  expandPath                  (char *path, int cmd_p, BITFLAGS *f);
 char * 	appendPath					(char *path, const char *append);
@@ -240,8 +240,9 @@ char ** parseCommand(char *line, BITFLAGS *f)
 	args = parseArguments(line, f); 
 	args = resolvePaths(args, f);
 	
-	/*executeArguments(args);*/
+	executeCommands(args, f);
 	
+	free(args); 
 	return args; 
 }	
 
@@ -257,7 +258,6 @@ char ** parseArguments(char *line, BITFLAGS *f)
 	int offset = 0;
 	int x = 0;
 	char **bucket = malloc(sizeof(char* ) * getBucketLength(line, ' ')); 
-	
 	char temp[255];
 	char *temp2[255]; 
 	
@@ -272,7 +272,6 @@ char ** parseArguments(char *line, BITFLAGS *f)
 		if(isSpecialChar(line[i])) { 
 			bucket[k] = malloc(sizeof(char*) * 1); 
 			*bucket[k] = line[i];
-			/*printf("bucket[%i]: %c\n", k, bucket[k]);*/
 			k++;
 		}
 		
@@ -295,7 +294,6 @@ char ** parseArguments(char *line, BITFLAGS *f)
 				for(; x < j; x++) {
 					bucket[k][x] = temp[x];
 				}
-				/* printf("bucket[%i]: %s\n", k, bucket[k]); */
 				j = 0;
 				k++;
 			}
@@ -320,7 +318,8 @@ char ** resolvePaths(char **args, BITFLAGS *f)
 }
 
 /*
-/returns 0 for argument, 
+returns
+0 for argument, 
 1 for external command, 
 2 cd, 
 3 for other built-in commands 
@@ -330,15 +329,15 @@ int isCommand(char **args, int i)
 	if(*args[i] == '>' || 
 		*args[i] == '<' ||
 		*args[i] == '&' ||
-		*args[i] == '|') {/*printf("external command\n");*/return 1;}
+		*args[i] == '|') {return 1;}
 	
-	if(strcmp(args[i], "cd") == 0) {/*printf("cd command\n");*/return 2;}
+	if(strcmp(args[i], "cd") == 0) {return 2;}
 	
 	if(strcmp(args[i], "echo") == 0 ||
 		strcmp(args[i], "etime") == 0 ||
-		strcmp(args[i], "io") == 0) {/*printf("built-in command\n");*/return 3;} 
+		strcmp(args[i], "io") == 0) {return 3;} 
 			
-	else {/*printf("argument\n");*/return 0;}
+	else {return 0;}
 }
 
 //removes ~/ from path
@@ -348,29 +347,12 @@ char * homePathBuilder(char * path, BITFLAGS *f)
 		printf("Building Home Path...\n"); 
 	 }
 	
-	char expandedHomePath[255]; 
-	char * ehp = expandedHomePath;
-	
-	char newPath[strlen(path)-2]; 
-	char *np = newPath; 
+	if(strlen(path) == 2) {return getenv("HOME");}
+	char * e = getenv("HOME");
+	strcat(e, path+1); 
 
-	strcpy(np, path+2);
-
-	//printf("homePathBuilder path: %s\n", np);
-	char * e = getPathFromEnv("HOME");
-	//printf("getPathFromEnv(HOME): %s\n", e); 
-	
-	int i = 0;
-	for(; i < strlen(e); i++) {
-		expandedHomePath[i] = e[i];
-	}
-	expandedHomePath[i] = '\0';
-	strcat(ehp, "/");
-	strcat(ehp, np);
-	
-	//printf("EHP: %s\n", ehp);
-	
-	return ehp;
+	if(pathExist(e)) {return e;} 	
+	return NULL;
 }
 
 //removes ./ from line 
@@ -381,38 +363,11 @@ char * currentDirPathBuilder(char * path, BITFLAGS *f)
 	 }
 		
 	if(strlen(path) == 2) {return getenv("PWD");}
+	char *currPath = getenv("PWD");	
+	strcat(currPath, path+1); 
 	
-	char *currPath = getenv("PWD");
-	
-	char newPath[255];
-	char *np = newPath; 
-	
-	char remainingPath[strlen(path)-1];
-	char *rp = remainingPath;
-	
-	int i = 0;
-	int j = 0;
-	
-	for(; i < strlen(currPath); i++) {
-		newPath[j++] = currPath[i];
-	}
-		
-	//printf("newPath: %s\n", np);	
-		
-	strcpy(rp, "/");
-	strcat(rp, path+2);
-	
-	//printf("remainingPath: %s\n", rp);
-	
-	
-	for(i =0; i < strlen(remainingPath); i++) {
-		newPath[j++] = remainingPath[i];
-	}
-	newPath[j] = '\0';
-	path = np;
-	
-	//printf("currentDirPathBuilder: %s\n", np);
-	return path;
+	if(pathExist(currPath)) {return currPath;}
+	return NULL;
 }
 
 //determines index of last "/" in path
@@ -422,9 +377,7 @@ int getParentIndex(const char * path)
 	int i = 0;
 	
 	for(; i < strlen(path); i++) {
-		if(path[i] == '/') {index = i;}
-	}
-	
+		if(path[i] == '/') {index = i;}}
 	return index;
 }
 
@@ -433,72 +386,33 @@ char * parentDirBuilder(char * path, BITFLAGS *f)
 {
 	if ( f->Flags.testing == true) {
 		printf("building parent directory...\n"); 
-	 }
+	}
 	
 	char *currPath = getenv("PWD");
 	int nlength = getParentIndex(currPath);
+	char *pp = malloc(sizeof(char*) * (nlength + (strlen(path)-2))); 
 	
-	char parentPath[255];
-	char * pp = parentPath;
-
-	int i = 0;
-	int j = 0;
+	strncpy(pp, currPath, nlength); 
+	strcat(pp, path+2);
 	
-	for(; i < nlength; i++) {
-		parentPath[j++] = currPath[i];
-	}		
-	
-	char newPath[strlen(path)-2];
-	char * np = newPath; 
-	strcpy(np, path+2); 
-	
-	for(i=0; i < strlen(newPath); i++) {
-		parentPath[j++] = newPath[i];
-	}
-	
-	parentPath[j] = '\0';
-	path = pp;
-	//printf("ParentPath: %s\n", path); 
-	
-	return path; 
+	if(pathExist(pp)) {return pp;} 
+	return NULL; 
 }
-
 
 //removes $KEYWORD in path and replaces with corresponding path 
 char * envPathAmmend(char * path, char * envVar, BITFLAGS *f) 
 {
 	if ( f->Flags.testing == true) {
 		printf("ammending envionrmental path...\n"); 
-	 }
+	}
+	
+	int keyword = strlen(envVar) + 1; 
 	char *currPath = getenv(envVar); 
-	char envPath[255];
-	char *ep = envPath; 
-	int keywordSize = strlen(envVar) + 1; 
-	int i = 0;
-	int j = 0;
 	
-	//printf("currPathSize: %i\n", strlen(currPath)); 
-	
-	for(; i < strlen(currPath); i++) {
-		envPath[j++] = currPath[i]; 
-	}
-	//printf("currPath: %s\n", ep); 
-	
-	char newPath[strlen(path)-keywordSize];
-	char * np = newPath; 
-	strcpy(np, path+keywordSize); 
-	
-	//printf("envNewPAth: %s\n", np); 
-	
-	for(i = 0; i < strlen(newPath); i++) {
-		envPath[j++] = newPath[i];
-	}
-	
-	envPath[j] = '\0'; 
-	path = ep; 
-	//printf("EP: %s\n", path); 
-	
-	return path; 
+	strcat(currPath, path+keyword);
+
+	if(pathExist(currPath)) {return currPath;}
+	return NULL; 
 }
 
 /* finds built in path */
@@ -509,48 +423,39 @@ char *expandBuiltIn(char *path, BITFLAGS *f) {
 	}
 	
 	char **prePath_split = split(getenv("PATH"), ':');
-	char temp[255];
-	char *t = temp; 
+	char *p; 
 	int i = 0;
-	int j = 0;
-	
 	
 	for(; prePath_split[i] != NULL; i++) {
+		p = prePath_split[i]; 
+		strcat(p, "/"); 
+		strcat(p, path);
 		
-		//printf("testing location: %s\n", prePath_split[i]); 
-		
-		memset(t, 0, 255*sizeof (char)); 
-		//copy prePath
-		for(j = 0; j < strlen(prePath_split[i]); j++) {
-			temp[j] = prePath_split[i][j];
-		} 
-		
-		//printf("Temp after prePath: %s\n", t);
-		
-		strcat(t, "/");
-		strcat(t, path);
-		
-		//printf("TEMP after path: %s\n", t);
-		
-		if(isPath2BuiltIn(t)) {
-			/*printf("TEMP PATH EXISTS1\n");*/ return t;
-		}
-		
-		memset(t, 0, 255*sizeof (char)); 
+		if(isPath2BuiltIn(p)) {return p;}
 	}
 	
 	return NULL;
 }
 
+//checks if path leads to executable
 bool isPath2BuiltIn(const char * path)
 {
-	struct stat sb; 
-	if(((path, &sb) >= 0) && (sb.st_mode > 0) && (S_IEXEC & sb.st_mode)) {
-		return true;
+	if(access(path, X_OK)) {
+		return false;
 	}
-	return false; 
+	else {return true;}  
 }
 
+//get environemt 
+char * getEnvironment(const char *path) 
+{
+	char *env = NULL; 
+	if(strncmp(path, "$PWD", 4) == 0) {env = "PWD";}
+	if(strncmp(path, "$HOME", 5) == 0) {env = "HOME";}
+	if(strncmp(path, "$SHELL", 6) == 0) {env = "SHELL";}
+	if(strncmp(path, "$USER", 5) == 0) {env = "USER";}
+	return env; 
+}
 
 //returns expanded argument, does nothing in many cases (determined by is_command)
 char * expandPath(char *path, int cmd_p, BITFLAGS *f)
@@ -560,123 +465,69 @@ char * expandPath(char *path, int cmd_p, BITFLAGS *f)
 	}
 	 
 	//external commands  
-	if(cmd_p == 1) {/*printf("expandPath: %s\n", path);*/ return path;}
+	if(cmd_p == 1) {return path;}
 	//cd command
 	if(cmd_p == 2) {
 		path = getenv("PWD");
 		return path; 
-		/*printf("expandPath: %s\n", path);*/
 	}
 	//for other built-ins
 	if(cmd_p == 3) {
-		//printf("expandPath: %s\n", path);
 		path = expandBuiltIn(path, f);
 		return path; 
 	}
 	//for arguments
 	if(cmd_p == 0) {
-		
-		//printf("Building path...\n");
-		char *envVar; 
 		if(contains(path, '$')) {
-			//printf("$ detected\n");
-			//printf("befor envPathAmmend: %s\n", path); 
-			if(strncmp(path, "$PWD", 4) == 0) {	
-				//path = envPathAmmend(path, "PWD");
-				envVar = "PWD";
-			}
-			if(strncmp(path, "$HOME", 5) == 0) {
-				//path = envPathAmmend(path, "HOME");
-				envVar = "HOME";
-			}
-			if(strncmp(path, "$SHELL", 6) == 0) {
-				//path = envPathAmmend(path, "SHELL");
-				envVar = "SHELL"; 
-			}
-			
-			path = envPathAmmend(path, envVar, f); 
-			//printf("envPathAmmend: %s\n", path);
-			if(pathExist(path)) {/*printf("The $ path is valid\n");*/ return path;}
+			path = envPathAmmend(path, getEnvironment(path), f); 
+			if(pathExist(path)) {return path;}
 			else {return NULL;}
 		}
 		if(contains(path, '~')) {
-			//printf("path: %s\n", path);
 			path = homePathBuilder(path, f);
-			//printf("~path: %s\n", path);
-			if(pathExist(path)) {/*printf("This ~ path exists\n");*/ return path;}
+			if(pathExist(path)) {return path;}
 			else{return NULL;}
 		}
 		if(contains(path, '.')) { 
+			//expand parent directory 
 			if(path[0] == '.' && path[1] == '.') {
-				//printf("PATH BEFORE: %s\n", path);
 				path = parentDirBuilder(path, f);
-				//printf("parentDir: %s\n", path); 
-				if(pathExist(path)) {/*printf("This .. path exists\n");*/ return path;}
+				if(pathExist(path)) {return path;}
 				else {return NULL;}
 			}
 			//expand current working directoy
 			if(path[0] == '.') {
-				char * c = currentDirPathBuilder(path, f);
-				path = c;
-				//printf("DOT PATH: %s\n", path);
+				path = currentDirPathBuilder(path, f);
 				if(pathExist(path)) {return path;}
 				else {return NULL;}
-				
-				
 			}
 		}
-		if(contains(path, '/')) {
-		
-			//printf("Entering buildPath function...\n"); 
+		if(contains(path, '/')) { 
 			path = buildPath(path, "PWD", f);
-			
-			if(pathExist(path)) {
-				/*
-				printf("This other path exists\n");
-				if(isFile(path)) {printf("This is another valid file\n");}
-				if(isDir(path)) {printf("This is another valid directory\n");}
-				*/
-				return path; 
-			}
-			else{
-				//printf("other path does not exist\n");
-				//return NULL;
-			}
+			if(pathExist(path)) {return path;}
+			else{return NULL;}
 		}
 		//treat as either file or directory
 		else {
-			
-			char *p = getPathFromEnv("PWD");
-			path = appendPath(p, path);
-			
-			if(pathExist(path)) {
-				/*
-				printf("This path exists\n");
-				if(isFile(path)) {printf("This is a valid file\n");}
-				if(isDir(path)) {printf("This is a valid directory\n");}
-				*/
-				return path; 
-			}
-			else {
-				//printf("path does not exist\n");
-				//return NULL;
-			}
+			return path; 
 		}
 	}
 	
-	return path;
+	return NULL;
 }
 
 //returns environment path
 char * getPathFromEnv(const char * env)
 {
-	char *p = malloc(sizeof(char* ) * strlen(getenv(env)));
+	char path[strlen(getenv(env))];
+	char *p = path;
 	char *e = getenv(env);
 	int i = 0;
 	
 	for(; i < strlen(getenv(env)); i++) {
 		p[i] = e[i];
 	}
+	path[i] = '\0';
 	return p; 
 }
 
@@ -687,18 +538,9 @@ bool isRoot(char * path)
 	return false;
 }
 
-//gets value in $HOME and attaches it to passed in path 
-char * expandHome(char * path)
-{
-	char expandedPath[255]; 
-	return strcat(strcat(expandedPath, getenv("HOME")), path);
-}
-
 //appends directory to end of path
 char * appendPath(char * path, char const * append)
 {
-	//printf("path of append: %s\n", path);
-	//printf("append: %s\n", append);
 	return strcat(strcat(path, "/"), append);
 }
 
@@ -711,41 +553,21 @@ char * buildPath(char * path, const char * envVar, BITFLAGS *f)
 	
 	int i = 0;
 	char newPath[255];
-	
-	memset(newPath, 0, 255*sizeof(char));
-	
-	
 	char *np = newPath;
-	
-	if(strcmp(envVar, "NAH") != 0) {stpcpy(newPath, getPathFromEnv(envVar));}
-	
-	int envPathSize = strlen(getPathFromEnv(envVar));
-	
 	char ** path_split = split(path, '/'); 
-	
+	memset(newPath, 0, 255*sizeof(char));
+	stpcpy(newPath, getPathFromEnv(envVar));
 	
 	for(; path_split[i] != NULL; i++) {
-		/*
-		printf("newPath before: %s\n", newPath); 
-		printf("path_split[%i]: %s\n", i, path_split[i]);
-		*/
 		appendPath(newPath, path_split[i]);
-		
-		envPathSize += strlen(path_split[i]); 
-		//printf("newPath after: %s\n", newPath); 
-		if (!pathExist(newPath)) {/*printf("Path does not exist\n");*/ return NULL;}			
+		if (!pathExist(newPath)) {return NULL;}			
 	}
-	//printf("SIZE: %i\n", strlen(newPath) + getBucketLength(path, '/'));
-	
-	//printf("Completed building path...\n");
-	//printf("NEW PATH: %s\n", np);
 	return np; 
 }
 
 //splits a path into 2D array based on deliminating char
 char ** split(const char * path, const char ch)
 {
-	//printf("Entering split...\n");
 	char **path_split = malloc(sizeof(char* ) * getBucketLength(path, ch)); 
 	char temp[255];
 	int i = 0;
@@ -753,7 +575,6 @@ char ** split(const char * path, const char ch)
 	int k = 0;
 	int x;
 
-	//printf("path: %s\n", path);
 	for(; i < strlen(path); i++) {
 		if(path[i] != ch) {
 			temp[j++] = path[i];
@@ -763,13 +584,11 @@ char ** split(const char * path, const char ch)
 			path_split[k] = malloc( sizeof(char*) * j);
 			for(x = 0; x < j; x++) {
 				path_split[k][x] = temp[x];
-				//printf("path_split[%i]: %s\n", k, path_split[k]);
 			}
 			j = 0;
 			k++;
 		}
 	}
-	//printf("returnting split path...\n");
 	path_split[k] ='\0';
 	return path_split;
 }
@@ -807,10 +626,22 @@ bool isDir(const char *path)
 	return S_ISDIR(buf.st_mode); 
 }
 
-//loop through args array and execute commands
-char ** executeArguments(char **args)
+//execute commmands 
+char ** executeCommands(char **cmd, BITFLAGS*f)
 {
-	//more goods
+	printf("Executing...\n");
+	
+	pid_t pid;
+	int status; 
+	 
+     if ((pid = fork()) == -1)
+        perror("fork error");
+     else if (pid == 0) {
+        execv(cmd[0], cmd);
+        printf("Return not expected. Must be an execv error.n\n");
+     }
+	 else {waitpid(pid, &status, 0);}
+	
 	return NULL;
 }
 
