@@ -93,7 +93,7 @@ int reactorLoop (BITFLAGS *f) {
         }
         
         // exit shell
-        if (strcmp(command, "exit") == 0) {
+        if (strncmp(command, "exit ", 5) == 0) {
             printf("Exiting Shell...\n");
             break;
         }
@@ -272,8 +272,8 @@ char ** parseArguments(char *line, BITFLAGS *f)
 		if(isSpecialChar(line[i])) { 
 			bucket[k] = malloc(sizeof(char*) * 1); 
 			*bucket[k] = line[i];
-			/*printf("bucket[%i]: %c\n", k, bucket[k]);*/
-			k++;
+			/*printf("bucket[%i]: %c\n", k, bucket[k]);
+			k++;*/
 		}
 		
 		/* build string from other symbols */
