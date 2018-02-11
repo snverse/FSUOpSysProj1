@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <ctype.h>
 #include <stdlib.h>
 
@@ -44,12 +45,14 @@ char *  expandPath                  (char *path, int cmd_p, BITFLAGS *f);
 char * 	appendPath					(char *path, const char *append);
 char * 	getPathFromEnv				(const char *env);
 char ** split						(const char *path, const char ch);
-char * 	buildPath					(char *path, const char *envVar, BITFLAGS *f);
+char * 	buildPath					(char *path, const char *envVar);
+char ** shiftArgs					(char **args);
 bool	contains 					(const char *path, const char ch);
 bool 	pathExist					(const char *path);
 bool 	isFile						(const char *path);
 bool 	isDir						(const char *path);
 bool 	isPath2BuiltIn				(const char *path);
+bool	isRoot						(char * path);
 
 int main (int argc, char **argv) {   
     
@@ -74,7 +77,12 @@ int reactorLoop (BITFLAGS *f) {
     int i = 0;
 	
     while(true) {
-        strcpy(command, ""); // clear old command
+        
+		user = getenv("USER");
+		machine = getenv("MACHINE");
+		path = getenv("PWD");
+		
+		strcpy(command, ""); // clear old command
         printf("%s@%s :: %s =>", user, machine, path);
         fgets(command, 255, stdin);
         
@@ -92,14 +100,18 @@ int reactorLoop (BITFLAGS *f) {
             printf("%s\n", command);
         }
         
+		/*
         // exit shell
-        if (strcmp(command, "exit") == 0) {
+        if (strncmp(command, "exit ", 5) == 0) {
             printf("Exiting Shell...\n");
-            break;
+            return 0;
         }
+		*/
+		
 		// parse the command 
 		else {parseCommand(command, f);}
     }
+	
 }
 
 // sets default values for flags
@@ -334,8 +346,8 @@ int isCommand(char **args, int i)
 	if(strcmp(args[i], "cd") == 0) {return 2;}
 	
 	if(strcmp(args[i], "echo") == 0 ||
-		strcmp(args[i], "etime") == 0 ||
-		strcmp(args[i], "io") == 0) {return 3;} 
+		strcmp(args[i], "sleep") == 0 ||
+		strcmp(args[i], "ls") == 0) {return 3;} 
 			
 	else {return 0;}
 }
@@ -345,13 +357,18 @@ char * homePathBuilder(char * path, BITFLAGS *f)
 {
 	if ( f->Flags.testing == true) {
 		printf("Building Home Path...\n"); 
-	 }
+	}
 	
-	if(strlen(path) == 2) {return getenv("HOME");}
-	char * e = getenv("HOME");
-	strcat(e, path+1); 
-
-	if(pathExist(e)) {return e;} 	
+	//if(strlen(path) == 2) {return getenv("HOME");}
+	char * home = getenv("HOME");
+	int length = strlen(home) + strlen(path); 
+	char *newPath = malloc(sizeof(char*) * length); 
+	
+	strcpy(newPath, home);
+	if(strlen(path) == 1 || strlen(path) > 2) {strcat(newPath, path+1);}
+	else{strcat(newPath, path+2);}
+	
+	if(pathExist(newPath)) {return newPath;} 	
 	return NULL;
 }
 
@@ -360,13 +377,18 @@ char * currentDirPathBuilder(char * path, BITFLAGS *f)
 {
 	if ( f->Flags.testing == true) {
 		printf("Building path to current directory...\n"); 
-	 }
+	}
 		
 	if(strlen(path) == 2) {return getenv("PWD");}
-	char *currPath = getenv("PWD");	
-	strcat(currPath, path+1); 
 	
-	if(pathExist(currPath)) {return currPath;}
+	char *currPath = getenv("PWD");	
+	int length = strlen(currPath) + strlen(path); 
+	char *newPath = malloc(sizeof(char*) * length);
+	
+	strcpy(newPath, currPath);
+	strcat(newPath, path+1); 
+	
+	if(pathExist(newPath)) {return newPath;}
 	return NULL;
 }
 
@@ -388,14 +410,18 @@ char * parentDirBuilder(char * path, BITFLAGS *f)
 		printf("building parent directory...\n"); 
 	}
 	
+	
 	char *currPath = getenv("PWD");
+	
+	if(isRoot(currPath)) {printf("ROOT REACHED!\n"); currPath ="/"; return currPath;}
+	
 	int nlength = getParentIndex(currPath);
-	char *pp = malloc(sizeof(char*) * (nlength + (strlen(path)-2))); 
+	char *parentPath = malloc(sizeof(char*) * (nlength + (strlen(path)-2))); 
 	
-	strncpy(pp, currPath, nlength); 
-	strcat(pp, path+2);
+	strncpy(parentPath, currPath, nlength); 
+	strcat(parentPath, path+2);
 	
-	if(pathExist(pp)) {return pp;} 
+	if(pathExist(parentPath)) {return parentPath;} 
 	return NULL; 
 }
 
@@ -406,12 +432,17 @@ char * envPathAmmend(char * path, char * envVar, BITFLAGS *f)
 		printf("ammending envionrmental path...\n"); 
 	}
 	
-	int keyword = strlen(envVar) + 1; 
-	char *currPath = getenv(envVar); 
+	//if(strcmp(envVar, "SHELL") == 0) {return path = "shell"; return path;}
 	
-	strcat(currPath, path+keyword);
-
-	if(pathExist(currPath)) {return currPath;}
+	char *currPath = getenv(envVar); 
+	int keyword = strlen(envVar) + 1; 
+	int length = strlen(currPath) + (strlen(path)-keyword);
+	char *newPath = malloc(sizeof(char*) * length); 
+	
+	strcpy(newPath, currPath);
+	strcat(newPath, path+keyword);
+	
+	if(pathExist(newPath)) {return newPath;}
 	return NULL; 
 }
 
@@ -430,8 +461,14 @@ char *expandBuiltIn(char *path, BITFLAGS *f) {
 		p = prePath_split[i]; 
 		strcat(p, "/"); 
 		strcat(p, path);
-		
+
+		//printf("p: %s\n", p);
 		if(isPath2BuiltIn(p)) {return p;}
+		/*
+		if(pathExist(p)) {return p;}
+		if(isFile(p)) {return p;}
+		if(isDir(p)) {return p;}
+		*/
 	}
 	
 	return NULL;
@@ -440,10 +477,17 @@ char *expandBuiltIn(char *path, BITFLAGS *f) {
 //checks if path leads to executable
 bool isPath2BuiltIn(const char * path)
 {
+	/*
+	struct stat sb; 
+	if(stat(path, &sb) == 0 && sb.st_mode & S_IXUSR) {return true;}
+	else {return false;}
+	*/
+	
 	if(access(path, X_OK)) {
 		return false;
 	}
 	else {return true;}  
+	
 }
 
 //get environemt 
@@ -468,7 +512,7 @@ char * expandPath(char *path, int cmd_p, BITFLAGS *f)
 	if(cmd_p == 1) {return path;}
 	//cd command
 	if(cmd_p == 2) {
-		path = getenv("PWD");
+		//path = getenv("HOME");
 		return path; 
 	}
 	//for other built-ins
@@ -503,7 +547,8 @@ char * expandPath(char *path, int cmd_p, BITFLAGS *f)
 			}
 		}
 		if(contains(path, '/')) { 
-			path = buildPath(path, "PWD", f);
+			path = buildPath(path, "PWD");
+			printf("After buildPath: %s\n", path); 
 			if(pathExist(path)) {return path;}
 			else{return NULL;}
 		}
@@ -519,22 +564,26 @@ char * expandPath(char *path, int cmd_p, BITFLAGS *f)
 //returns environment path
 char * getPathFromEnv(const char * env)
 {
-	char path[strlen(getenv(env))];
-	char *p = path;
+	char envPath[strlen(getenv(env))+1];
+	char *eP = envPath;
 	char *e = getenv(env);
 	int i = 0;
 	
 	for(; i < strlen(getenv(env)); i++) {
-		p[i] = e[i];
+		envPath[i] = e[i];
 	}
-	path[i] = '\0';
-	return p; 
+	envPath[i] = '\0';	
+	
+	//printf("getPathFromEnv: %s\n", eP); 
+	return eP; 
 }
 
 bool isRoot(char * path)
 {
-	char * root = "/";
-	if (strcmp(path, root) == 0) {return true;}
+	char * root1 = "/home";
+	char * root2 = "/"; 
+	if (strcmp(path, root1) == 0 ||
+		strcmp(path,root2) == 0) {return true;}
 	return false;
 }
 
@@ -545,24 +594,24 @@ char * appendPath(char * path, char const * append)
 }
 
 //gets value from environmental variable and tests each with passed in path
-char * buildPath(char * path, const char * envVar, BITFLAGS *f)
-{
-	if ( f->Flags.testing == true) {
-		printf("Building Path...\n"); 
-	 }
+char * buildPath(char * path, const char * envVar)
+{	
+	char * currPath = getenv(envVar);
+	int length = strlen(envVar) + strlen(path) + 1; 
+	char * newPath = malloc(sizeof(char*) * length);
 	
-	int i = 0;
-	char newPath[255];
-	char *np = newPath;
-	char ** path_split = split(path, '/'); 
-	memset(newPath, 0, 255*sizeof(char));
-	stpcpy(newPath, getPathFromEnv(envVar));
+	strcpy(newPath, currPath);
 	
-	for(; path_split[i] != NULL; i++) {
-		appendPath(newPath, path_split[i]);
-		if (!pathExist(newPath)) {return NULL;}			
-	}
-	return np; 
+	//printf("newPath1: %s\n", newPath);
+	strcat(newPath, "/");
+	//printf("newPath2: %s\n", newPath);
+	strcat(newPath, path);
+	//printf("newPath3: %s\n", newPath); 
+	
+	//newPath[size-1] = '\0';
+	//printf("finalPath: %s\n", np);
+	if(pathExist(newPath)) {return newPath;}
+	return NULL;
 }
 
 //splits a path into 2D array based on deliminating char
@@ -626,6 +675,146 @@ bool isDir(const char *path)
 	return S_ISDIR(buf.st_mode); 
 }
 
+//list of builtin commands and corresponding functions
+char *builtin_cmd[] = {
+	"cd",
+	"etime",
+	"exit",
+	"io"
+};
+
+int cd_lsh(char  **args) 
+{
+	printf("changing to directory: %s\n", args[1]); 
+	
+	if(args[1] == NULL) {
+		printf("NULL terminal running\n");
+		//printf("defaultPath: %s\n", defaultPath); 
+		chdir(getenv("HOME")); 
+		setenv("PWD", getenv("HOME"), 1);
+		return 0;
+	}
+	
+	//if arg is single word, append current directory 
+	if(!contains(args[1], '/')) {
+		printf("!contains terminal running\n");
+		args[1] = buildPath(args[1], "PWD");
+	}
+	
+	printf("args[1]: %s\n", args[1]); 
+	chdir(args[1]); 
+	setenv("PWD", args[1], 1);
+	
+	return 1; 
+}
+
+/*
+facilitate etime function
+*/
+int etime_lsh(char ** args, int choice, struct timeval init_t)
+{	
+	double time; 
+	int i = 1; 
+	int j = 0; 
+	struct timeval t; 
+
+	//start 
+	if(choice == 1) {
+		//shift contents of args
+		args = shiftArgs(args);
+		return 1; 
+	}
+	
+	//end 
+	if(choice == 0) {
+		gettimeofday(&t, NULL);
+		time = (t.tv_sec - init_t.tv_sec) +
+				((t.tv_usec - init_t.tv_usec)/1000000.0); 
+		
+		printf("Elapsed Time: %.6fs\n", time); 
+		return 0; 
+	}
+}
+
+char **shiftArgs(char ** args)
+{
+	int i = 1;
+	int j = 0; 
+	
+	//shift contents of args
+	for(; args[i] != NULL; i++) {
+		args[j] = args[i];
+		//printf("io args[%i]: %s\n", j, args[j]);
+		j++;
+	}
+	args[j] = NULL;
+	return args;
+}
+
+
+int io_lsh(char **args, int flag)
+{
+	if(flag == 0) {args = shiftArgs(args);}
+	if(flag == 1) {
+		char newPath[255];
+		memset(newPath, 0, 255);
+		char * np = newPath; 
+		char * proc = "/proc/";
+		char p[10]; 
+		
+		snprintf(p, 10, "%d", ((int)getpid()));
+		strcat(np, proc);
+		strcat(np, p); 
+		strcat(np, "/io");
+			
+		char buffer[255];
+		FILE *fp = fopen(np, "r");
+		while(fgets(buffer, 255, (FILE*) fp)) {
+			printf("%s", buffer);
+		}
+
+		fclose(fp);
+	}
+	return 1;
+}
+
+int exit_lsh(char **args)
+{
+	printf("Exiting Shell...\n"); 
+	exit(1); 
+}
+
+int (*builtin_func1[]) (char **) = {	
+	&exit_lsh
+};
+
+int (*builtin_func2[]) (char **) = {
+	&cd_lsh
+};
+
+int (*builtin_func3[]) (char **, int, struct timeval) = {
+	&etime_lsh
+};
+
+int (*builtin_func4[]) (char **, int) = {
+	&io_lsh
+};
+
+int getNumBuiltIns()
+{
+	return sizeof(builtin_cmd) / sizeof(char*); 
+}
+
+int isBuiltIn(char * command)
+{
+	int i = 0;
+	for(; i < getNumBuiltIns(); i++) {
+		if(strcmp(command, builtin_cmd[i])) {return i;}
+	}
+	//printf("BuiltIn Index: %i\n", i); 
+	return -1;
+}
+
 //execute commmands 
 char ** executeCommands(char **cmd, BITFLAGS*f)
 {
@@ -633,15 +822,57 @@ char ** executeCommands(char **cmd, BITFLAGS*f)
 	
 	pid_t pid;
 	int status; 
-	 
-     if ((pid = fork()) == -1)
-        perror("fork error");
-     else if (pid == 0) {
-        execv(cmd[0], cmd);
-        printf("Return not expected. Must be an execv error.n\n");
-     }
-	 else {waitpid(pid, &status, 0);}
+	int i = 0;
+	char * c = cmd[0];
+	struct timeval start;
+
 	
+	if(isBuiltIn(cmd[0]) >= 0) {
+		//exit the shell
+		if(strncmp(cmd[0], "exit", 4) == 0) {
+			(*builtin_func1[i])(cmd); 
+			return NULL;
+		}
+		//change directory 
+		if(strncmp(cmd[0], "cd", 2) == 0) {
+			(*builtin_func2[i])(cmd); 
+			return NULL;
+		}
+		//manupulate cmd** and start timer 
+		if(strncmp(cmd[0], "etime", 5) == 0) {
+			(*builtin_func3[i])(cmd, 1, start); 
+			gettimeofday(&start, NULL);
+		}
+		//io
+		if(strncmp(cmd[0], "io", 2) == 0) {
+			//printf("IO detected\n");
+			(*builtin_func4[i])(cmd, 0); 
+		}
+		
+	}
+	
+	
+    if ((pid = fork()) == -1) {
+		perror("fork error");
+	}
+       
+    else if (pid == 0) {
+		execv(cmd[0], cmd);
+        printf("Return not expected. Must be an execv error.n\n");
+    }
+	else {
+		waitpid(pid, &status, 0);
+		
+		//stop etime timer and print time lapse 
+		if(strncmp(c, "etime", 5) == 0) {
+			(*builtin_func3[i])(cmd, 0, start); 
+		}
+		
+		//build path to pid/io and read file 
+		if(strncmp(c, "io", 2) == 0) {
+			(*builtin_func4[i])(cmd, 1); 
+		}		
+	}
 	return NULL;
 }
 
