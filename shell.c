@@ -8,11 +8,13 @@
 #include <sys/time.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include <sys/wait.h>
 
 // true and false
 #define true 1
 #define false 0
-
+// size of buffer for commands
+#define CHARLENGTH 255
 
 // define union for flags
 typedef union
@@ -53,6 +55,8 @@ bool 	isFile						(const char *path);
 bool 	isDir						(const char *path);
 bool 	isPath2BuiltIn				(const char *path);
 bool	isRoot						(char * path);
+void    storeCommands               (char *line, char* saved, BITFLAGS* f);
+char * getCommands                  (char* saved, BITFLAGS *f);
 
 int main (int argc, char **argv) {   
     
@@ -73,22 +77,25 @@ int reactorLoop (BITFLAGS *f) {
     char *user = getenv("USER");
     char *machine = getenv("MACHINE");
     char *path = getenv("PWD");
-    char command[255];
+    char *command = (char*) malloc(CHARLENGTH * sizeof(char));
+    char *saved = (char*) malloc(CHARLENGTH * sizeof(char));
     int i = 0;
 	
     while(true) {
-        
 		user = getenv("USER");
 		machine = getenv("MACHINE");
 		path = getenv("PWD");
 		
 		strcpy(command, ""); // clear old command
         printf("%s@%s :: %s =>", user, machine, path);
-        fgets(command, 255, stdin);
         
+        // clear fgets
+        fflush(stdin);
+        fgets(command, CHARLENGTH, stdin);        
+	    i = 0;
 	
         // remove newline
-        for (; i < 255; i++) {
+        for (i; i < CHARLENGTH; i++) {
             if (command[i] == '\n') {
                 command[i] = '\0';
                 break;
@@ -99,19 +106,107 @@ int reactorLoop (BITFLAGS *f) {
         if ( f->Flags.testing == true) {
             printf("%s\n", command);
         }
-        
-		/*
-        // exit shell
-        if (strncmp(command, "exit ", 5) == 0) {
-            printf("Exiting Shell...\n");
-            return 0;
-        }
-		*/
+       
+        storeCommands(command, saved, f); // move all commands into parsed list
+       
+        do{
+            if (f->Flags.testing) {
+                printf("entering reactor loop loop\n");
+            }
+            
+            // free command and reassign
+            free(command);
+            command = getCommands(saved, f); //get next command
+            
+            // exit shell
+            if (strcmp(command, "exit") == 0) {
+                printf("Exiting Shell...\n");
+                exit(0);
+            }
 		
-		// parse the command 
-		else {parseCommand(command, f);}
+		    // parse the command 
+		    parseCommand(command, f);
+		}while(command[0] != '\0');
     }
-	
+    
+    free(command);
+    free(saved);
+    
+    return 0;
+}
+
+void storeCommands (char *line, char* saved, BITFLAGS* f) {
+    int i = 0;
+    
+    for ( i; i < CHARLENGTH; i++) {
+        if(line[i] == '\n') {
+            saved[i] = '\0';
+            break;
+        }
+        
+        saved[i] = line[i]; //copy user input
+    }
+    
+    if(f->Flags.testing) {
+        printf("storeCommands:\n\t%s\n", saved);
+    }
+    
+    return;
+}
+
+char * getCommands (char* saved, BITFLAGS *f) {
+    char *temp = (char*) malloc(CHARLENGTH * sizeof(char));
+    int i = 0, j = 0;
+    
+    if (saved[0] == '\0') {
+        temp[0] = '\0';
+        return temp;
+    }
+    
+    // copy till ; or |
+    for ( i = 0; i < CHARLENGTH; i++) {
+        if (saved[i] == ';') {
+            i++;
+            break;
+        }
+        
+        if (saved[i] == '|') {
+            i++;
+            // enable bitflags for piping
+            break;
+        }
+        
+        if (saved[i] == '\0') {
+            break;
+        }
+        
+        temp[j++] = saved[i];
+    }
+    
+    // add null terminator to temp
+    temp[j] = '\0';
+    
+    // reset j, increment i
+    j = 0;
+    
+    // copy saved over saved till null terminator
+    for ( i; i < CHARLENGTH; i++) {
+        if (saved[i] == '\0') {
+            saved[j] = '\0';
+            break;
+        }
+        
+        saved[j++] = saved[i];
+    }
+    
+    // testing output
+    if (f->Flags.testing) {
+        printf("getCommands:\n");
+        printf("\tNext command: %s\n", temp);
+        printf("\tRemaining commands: %s\n", saved);
+    }
+    
+    return temp;
 }
 
 // sets default values for flags
@@ -324,7 +419,9 @@ char ** resolvePaths(char **args, BITFLAGS *f)
 	int i = 0;
 	for(; args[i] != NULL; i++) {
 		args[i] = expandPath(args[i], isCommand(args, i), f); 
-		printf("ARGS[%i]: %s\n", i, args[i]);
+		if (f->Flags.testing) {
+		    printf("ARGS[%i]: %s\n", i, args[i]);
+	    }
 	}
 	return args;
 }
@@ -818,7 +915,9 @@ int isBuiltIn(char * command)
 //execute commmands 
 char ** executeCommands(char **cmd, BITFLAGS*f)
 {
-	printf("Executing...\n");
+    if (f->Flags.testing){
+	    printf("Executing...\n");
+	}
 	
 	pid_t pid;
 	int status; 
