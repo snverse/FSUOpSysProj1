@@ -89,9 +89,7 @@ int reactorLoop (BITFLAGS *f) {
 		strcpy(command, ""); // clear old command
         printf("%s@%s :: %s =>", user, machine, path);
         
-        // clear fgets
-        fflush(stdin);
-        fgets(command, CHARLENGTH, stdin);        
+        scanf(" %[^\n]", command);       
 	    i = 0;
 	
         // remove newline
@@ -101,15 +99,10 @@ int reactorLoop (BITFLAGS *f) {
                 break;
             }
         }
-
-        // testing output
-        if ( f->Flags.testing == true) {
-            printf("%s\n", command);
-        }
        
         storeCommands(command, saved, f); // move all commands into parsed list
-       
-        do{
+        
+        while(saved[0] != '\0') {
             if (f->Flags.testing) {
                 printf("entering reactor loop loop\n");
             }
@@ -126,7 +119,7 @@ int reactorLoop (BITFLAGS *f) {
 		
 		    // parse the command 
 		    parseCommand(command, f);
-		}while(command[0] != '\0');
+		}
     }
     
     free(command);
