@@ -24,7 +24,10 @@ typedef union
     struct {
        unsigned int testing    : 1;
        unsigned int verbose    : 1;
-       unsigned int unassigned : 30; // subtract when adding new flag
+       unsigned int pipeIn     : 1;
+       unsigned int pipeOut    : 1;
+       unsigned int bg         : 1;
+       unsigned int unassigned : 27; // subtract when adding new flag
     } Flags;
 } BITFLAGS;
 
@@ -56,7 +59,8 @@ bool 	isDir						(const char *path);
 bool 	isPath2BuiltIn				(const char *path);
 bool	isRoot						(char * path);
 void    storeCommands               (char *line, char* saved, BITFLAGS* f);
-char * getCommands                  (char* saved, BITFLAGS *f);
+char *  getCommands                 (char* saved, BITFLAGS *f);
+void    flipPipe                    (BITFLAGS *f);
 
 int main (int argc, char **argv) {   
     
@@ -111,6 +115,15 @@ int reactorLoop (BITFLAGS *f) {
             free(command);
             command = getCommands(saved, f); //get next command
             
+            // print flags
+            if (f->Flags.testing) {
+                printf("--- FLAGS ---\n");
+                printf("\tpipeIn: %d\n", f->Flags.pipeIn);
+                printf("\tpipeOut: %d\n", f->Flags.pipeOut);
+                printf("\tbg: %d\n", f->Flags.bg);
+                printf("-------------\n");
+            }
+            
             // exit shell
             if (strcmp(command, "exit") == 0) {
                 printf("Exiting Shell...\n");
@@ -153,6 +166,7 @@ char * getCommands (char* saved, BITFLAGS *f) {
     
     if (saved[0] == '\0') {
         temp[0] = '\0';
+        
         return temp;
     }
     
@@ -165,7 +179,7 @@ char * getCommands (char* saved, BITFLAGS *f) {
         
         if (saved[i] == '|') {
             i++;
-            // enable bitflags for piping
+            f->Flags.pipeIn = true;
             break;
         }
         
@@ -178,6 +192,12 @@ char * getCommands (char* saved, BITFLAGS *f) {
     
     // add null terminator to temp
     temp[j] = '\0';
+    
+    //check for bg
+    if (strstr(temp, " &\0")) {
+        f->Flags.bg = true;
+        temp[--j] = '\0';
+    }
     
     // reset j, increment i
     j = 0;
@@ -919,7 +939,7 @@ char ** executeCommands(char **cmd, BITFLAGS*f)
 	struct timeval start;
 
 	
-	if(isBuiltIn(cmd[0]) >= 0) {
+	/*if(isBuiltIn(cmd[0]) >= 0) {
 		//exit the shell
 		if(strncmp(cmd[0], "exit", 4) == 0) {
 			(*builtin_func1[i])(cmd); 
@@ -941,31 +961,41 @@ char ** executeCommands(char **cmd, BITFLAGS*f)
 			(*builtin_func4[i])(cmd, 0); 
 		}
 		
-	}
+	}*/
 	
-	
-    if ((pid = fork()) == -1) {
-		perror("fork error");
-	}
-       
-    else if (pid == 0) {
-		execv(cmd[0], cmd);
-        printf("Return not expected. Must be an execv error.n\n");
+	if (f->Flags.bg) {
+	    // bg process
+	    printf("run process in bg.\n");
+	} else {
+	    // not bg process
+        if ((pid = fork()) == -1) {
+    		perror("fork error");
+    	}
+           
+        else if (pid == 0) {
+    		execv(cmd[0], cmd);
+            printf("Return not expected. Must be an execv error.n\n");
+        }
+    	else {
+    		waitpid(pid, &status, 0);
+    		
+    		//stop etime timer and print time lapse 
+    		if(strncmp(c, "etime", 5) == 0) {
+    			(*builtin_func3[i])(cmd, 0, start); 
+    		}
+    		
+    		//build path to pid/io and read file 
+    		if(strncmp(c, "io", 2) == 0) {
+    			(*builtin_func4[i])(cmd, 1); 
+    		}		
+        }
     }
-	else {
-		waitpid(pid, &status, 0);
-		
-		//stop etime timer and print time lapse 
-		if(strncmp(c, "etime", 5) == 0) {
-			(*builtin_func3[i])(cmd, 0, start); 
-		}
-		
-		//build path to pid/io and read file 
-		if(strncmp(c, "io", 2) == 0) {
-			(*builtin_func4[i])(cmd, 1); 
-		}		
-	}
 	return NULL;
 }
 
-
+void flipPipe(BITFLAGS *f) {
+    if(f->Flags.pipeIn) {
+        f->Flags.pipeIn = false;
+        f->Flags.pipeOut= true;
+    }
+}
