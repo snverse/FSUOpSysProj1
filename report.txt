@@ -1,0 +1,209 @@
+============================
+Problem statement:
+============================
+
+Design and implement a basic shell interface that supports input/output redirection, pipes, background
+processing, and a series of built in functions as specified below. The shell should be robust (e.g. it
+should not crash under any circumstance beyond machine failure). The required features should adhere
+to the operational semantics of the bash shell. 
+
+============================================
+Steps taken to solve problem:
+============================================
+
+1. 	Experiment with existing shell
+2. 	Research fork(), execv() and related concepts on YouTube and Google
+3. 	Designed basic shell loop with flag system to facilitate testing mode
+4. 	Implemented user-input routine
+5. 	Implemented input-parsing routine
+6. 	Verbose testing of parsing routine 
+7. 	Implement forking new process
+8. 	Implement execution loop 
+9. 	Verbose testing of exection loop
+10. Implement builtin functionalties 
+11. Verbose testing of builtins 
+12. Research and implementation of I/O reidrection
+13. Verbose testing of redirects
+14. Research and implement piping
+15. Verbose testing of pipes 
+16. Research and implement background processes
+17. Verbose testing of background porcesses 
+18. Implement zombie-termination
+19. Search for bugs
+20. Completed. 
+
+=============================
+Assumptions:
+=============================
+
+- No more than three pipes (|) will appear in a single line
+
+- You do not need to handle globs, regular expressions, special characters (other than the ones
+specified), quotes, escaped characters, etc
+
+- Yo do need to handle expansion of environment variables
+	-ls $HOME
+		-prints contents of home directory
+	-$SHELL
+		-loads standard shell
+	-$UNDEFINED
+		-error, undefined environment variable
+		-The user input will be no more than 255 characters
+
+-Pipes and I/O redirection will not occur together
+
+-Multiple redirections of the same type will not appear
+
+-You do not need to implement auto-complete
+
+-You do need to handle zombie processes
+
+- You do not need to support built in commands that are not specified 
+
+=================================
+System calls:
+=================================
+
+read() - get user input
+
+stdio.h - output, printf, etc.
+
+stdlib.h - fork(), execv(), malloc, chdir(), exit(), getenv()
+
+sys/time.h - gettimeofday()
+ 
+unistd.h - open(), close(), STDIN_FILENO
+ 
+sys/stat.h - S_ISREG, S_ISDIR
+
+fcntl.h - O_WRONLY, O_CREAT, O_RDONLY
+
+======================================
+Problems:
+======================================
+
+-familarizing ourselves with char** 
+-parsing was very difficult and time consuming
+-difficulty freeing memory once allocated
+-distributing workload and communicating as group 
+-familarizing with fork() functionality
+-handling zombie child 
+-pipe method was difficult to faciliate given inexperience with char**
+-facilitating redirect funtionalties across child/parent thread 
+
+=======================================
+Known Bugs:
+=======================================
+
+1. Zombie processes are allowed to run free
+2. Sometime exit builtin will not properly exit shell (does work most of the time though)
+3. When esleep is run after io, random memory garbage appended to esleep CMD argument
+4. An extra element is appended to a line where the final argument is &. The argument is always empty 
+
+======================================
+Division of Labor:
+======================================
+
+Nicholas Kelton
+	-input-parsing
+	-built-in functions
+	-processing fork and execv
+	-environmental variables
+	-path resolution
+	-i/o redirection
+	-piping
+	-testing 
+
+Davis Phillips
+	-taking input
+	-bitflag testing 
+	-prompt
+	-piping
+	
+Bryce Vokus
+	-nothing to report 
+	
+===============================================
+Slack Days Used:
+===============================================
+
+Nicholas Kelton: too many 
+Davis Phillips: 
+Bryce Vokus: everyday minus one 
+
+================================================
+Log:
+================================================
+
+1/12/18 (roughly)
+-project assigned
+
+1/18/18
+-research existing shell
+-research major functions like fork(), execv(), etc
+
+1/21/18
+-begin designing intial functionality of shell
+-continue research
+
+1/26/18
+-implement basic input loop
+-implement bitflag for tessting
+
+1/28/18
+-further develop shell designin
+
+1/2/18
+-faciliate parsing 
+
+1/3/18
+-testing
+-fix parse errors: random memeory garbage no longer appending to end of last arg
+-path expansion
+
+1/4/18
+-tesing 
+-error fixes: expansion for $USER and cases of $PWD/file
+-format cleaning 
+
+1/6/18
+-tesing
+-facilitate path resolution
+
+1/8/18
+-error fixes: cases were ../ ./ ~/ were not expanding properly
+-fork() and execv() functionality implemented
+
+1/9/18
+-builtin functionality implemented
+-fixes so that invalid entry are handled and produce error messages
+
+1/10/18
+-vicious testing cycle
+-code correction, improve readability
+-implment i/o redirection 
+
+1/11/18
+-tesing 
+-implement piping 
+-implement background process
+-search and remedy remaining bugs and errors
+
+1/12/18
+-project complete 
+
+================================
+Questions
+================================
+
+
+
+
+
+
+
+
+
+ 
+	
+	
