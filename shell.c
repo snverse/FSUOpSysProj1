@@ -1213,7 +1213,7 @@ char ** executeCommands(char **cmd, BITFLAGS*f)
 		//check if pipe
 		else if(pipeScan(cmd, f)) {
 				
-			printf("This is a pipe!\n");
+			//printf("This is a pipe!\n");
 				
 			//first instance of pipe 
 			if(pipeFlag == 0) {
@@ -1249,7 +1249,7 @@ char ** executeCommands(char **cmd, BITFLAGS*f)
 		//handle piping 
 		if(pipeFlag > 0) {
 				
-			printf("Pipe flag raised\n");
+			//printf("Pipe flag raised\n");
 				
 			//final command 
 			if(f->Flags.empty) {
@@ -1260,7 +1260,7 @@ char ** executeCommands(char **cmd, BITFLAGS*f)
 				
 			//intermiterary command 
 			else {
-				printf("I'm the middle man\n");	
+				//printf("I'm the middle man\n");	
 			}
 		}
 		
