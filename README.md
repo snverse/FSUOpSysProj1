@@ -2,8 +2,7 @@ Member 1: Nicholas Kelton
 Member 2: Davis Phillips
 Member 3: Bryce Vokus
 
-
- p1-Kelton-Phillips-Vokus.tar contents:
+p1-Kelton-Phillips-Vokus.tar contents:
 	README
 	shell.c		//main implementation, including all helper functions 
 	Makefile
@@ -20,7 +19,6 @@ $> make clean
 Known bugs:
 1. Zombie processes are allowed to run free
 2. When esleep is run after io, random memory garbage appended to esleep CMD argument
-3. An extra element is appended to a line where the final argument is &. The argument is always empty 
 
 To do:
 1. Still need to do piping
