@@ -7,12 +7,8 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <ctype.h>
-<<<<<<< HEAD
 #include <fcntl.h>
-=======
-#include <stdlib.h>
 #include <sys/wait.h>
->>>>>>> 45d9adbb04be4fbf9948097735693512e3d2af72
 
 // true and false
 #define true 1
@@ -127,11 +123,14 @@ int reactorLoop (BITFLAGS *f) {
                 printf("-------------\n");
             }
             
+			/*
             // exit shell
             if (strcmp(command, "exit") == 0) {
                 printf("Exiting Shell...\n");
                 exit(0);
             }
+		*/
+		
 		
 		    // parse the command 
 		    parseCommand(command, f);
@@ -152,12 +151,6 @@ void storeCommands (char *line, char* saved, BITFLAGS* f) {
             saved[i] = '\0';
             break;
         }
-<<<<<<< HEAD
-		
-		// parse the command 
-		else {parseCommand(command, f);}
-=======
-        
         saved[i] = line[i]; //copy user input
     }
     
@@ -196,7 +189,6 @@ char * getCommands (char* saved, BITFLAGS *f) {
         }
         
         temp[j++] = saved[i];
->>>>>>> 45d9adbb04be4fbf9948097735693512e3d2af72
     }
     
     // add null terminator to temp
@@ -487,15 +479,8 @@ char ** resolvePaths(char **args, BITFLAGS *f)
 	 }
 	int i = 0;
 	for(; args[i] != NULL; i++) {
-<<<<<<< HEAD
 		args[i] = expandPath(args[i], isCommand(args, i, f), f); 
 		printf("ARGS[%i]: %s\n", i, args[i]);
-=======
-		args[i] = expandPath(args[i], isCommand(args, i), f); 
-		if (f->Flags.testing) {
-		    printf("ARGS[%i]: %s\n", i, args[i]);
-	    }
->>>>>>> 45d9adbb04be4fbf9948097735693512e3d2af72
 	}
 	return args;
 }
@@ -509,8 +494,6 @@ returns
 */
 int isCommand(char **args, int i, BITFLAGS *f) 
 {
-	//char command[255]'
-	//char *
 	char * c = expandBuiltIn(args[i], f);
 	
 	if(strcmp(args[i], "cd") == 0) {return 2;}
@@ -534,7 +517,6 @@ char * homePathBuilder(char * path, BITFLAGS *f)
 		printf("Building Home Path...\n"); 
 	}
 	
-	//if(strlen(path) == 2) {return getenv("HOME");}
 	char * home = getenv("HOME");
 	int length = strlen(home) + strlen(path); 
 	char *newPath = malloc(sizeof(char*) * length); 
@@ -981,16 +963,11 @@ int isBuiltIn(char * command)
 //copies arg to an index and nulls the rest of the elements
 char ** argsCopy(char ** args, int index)
 {
-<<<<<<< HEAD
+
 	int j = 0; 
 	int i = 0;
 	int flag = 0;
-=======
-    if (f->Flags.testing){
-	    printf("Executing...\n");
-	}
->>>>>>> 45d9adbb04be4fbf9948097735693512e3d2af72
-	
+
 	//shift contents of args
 	for(; args[i] != NULL; i++) {
 		if(args[i] == args[index] || flag == 1)
@@ -999,7 +976,7 @@ char ** argsCopy(char ** args, int index)
 			flag = 1; 
 		}
 		args[i] = args[i]; 
-		printf("redirct args[%i]: %s\n", i, args[i]);
+		//printf("redirct args[%i]: %s\n", i, args[i]);
 	}
 	return args; 
 }
@@ -1038,7 +1015,7 @@ int builtinLauncher(char ** cmd, struct timeval start)
 {
 	int i = 0;
 	
-	/*if(isBuiltIn(cmd[0]) >= 0) {
+	if(isBuiltIn(cmd[0]) >= 0) {
 		//exit the shell
 		if(strncmp(cmd[0], "exit", 4) == 0) {
 			(*builtin_func1[i])(cmd); 
@@ -1108,7 +1085,6 @@ int redirectHelper(char **cmd, int val)
 		}
 	}
 		
-<<<<<<< HEAD
 	if(fd == -1) {printf("Error\n"); return -1;}
 	else{return fd;}
 }	
@@ -1185,7 +1161,7 @@ char ** pipeCopy(char ** cmd)
 		for(y = 0; y < size; y++) {
 			copy[x][y] = cmd[x][y];
 		}
-		printf("copy[%i]: %s\n", x, copy[x]);
+		//printf("copy[%i]: %s\n", x, copy[x]);
 	}
 	return copy;
 }
@@ -1221,7 +1197,7 @@ char ** nextCommand(char ** pipeBay, int start, int end)
 			nCommand[k][j] = pipeBay[i][j];
 			printf("%c\n", nCommand[k][j]);
 		}
-		printf("nCommnd[%i]: %s\n", k, nCommand[k]);
+		//printf("nCommnd[%i]: %s\n", k, nCommand[k]);
 	}
 	
 	return nCommand; 
@@ -1416,9 +1392,8 @@ char ** executeCommands(char **cmd, BITFLAGS*f)
 	return NULL;
 	}
 }
-=======
-	}*/
-	
+
+/*	
 	if (f->Flags.bg) {
 	    // bg process
 	    printf("run process in bg.\n");
@@ -1455,4 +1430,4 @@ void flipPipe(BITFLAGS *f) {
         f->Flags.pipeOut= true;
     }
 }
->>>>>>> 45d9adbb04be4fbf9948097735693512e3d2af72
+*/
