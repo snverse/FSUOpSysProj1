@@ -7,12 +7,18 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <ctype.h>
+<<<<<<< HEAD
 #include <fcntl.h>
+=======
+#include <stdlib.h>
+#include <sys/wait.h>
+>>>>>>> 45d9adbb04be4fbf9948097735693512e3d2af72
 
 // true and false
 #define true 1
 #define false 0
-
+// size of buffer for commands
+#define CHARLENGTH 255
 
 // define union for flags
 typedef union
@@ -22,7 +28,10 @@ typedef union
     struct {
        unsigned int testing    : 1;
        unsigned int verbose    : 1;
-       unsigned int unassigned : 30; // subtract when adding new flag
+       unsigned int pipeIn     : 1;
+       unsigned int pipeOut    : 1;
+       unsigned int bg         : 1;
+       unsigned int unassigned : 27; // subtract when adding new flag
     } Flags;
 } BITFLAGS;
 
@@ -52,6 +61,9 @@ bool 	isFile						(const char *path);
 bool 	isDir						(const char *path);
 bool 	isPath2BuiltIn				(const char *path);
 bool	isRoot						(char * path);
+void    storeCommands               (char *line, char* saved, BITFLAGS* f);
+char *  getCommands                 (char* saved, BITFLAGS *f);
+void    flipPipe                    (BITFLAGS *f);
 
 int main (int argc, char **argv) {   
     
@@ -72,37 +84,151 @@ int reactorLoop (BITFLAGS *f) {
     char *user = getenv("USER");
     char *machine = getenv("MACHINE");
     char *path = getenv("PWD");
-    char command[255];
+    char *command = (char*) malloc(CHARLENGTH * sizeof(char));
+    char *saved = (char*) malloc(CHARLENGTH * sizeof(char));
     int i = 0;
 	
     while(true) {
-        
 		user = getenv("USER");
 		machine = getenv("MACHINE");
 		path = getenv("PWD");
 		
 		strcpy(command, ""); // clear old command
         printf("%s@%s :: %s =>", user, machine, path);
-        fgets(command, 255, stdin);
         
+        scanf(" %[^\n]", command);       
+	    i = 0;
 	
         // remove newline
-        for (; i < 255; i++) {
+        for (i; i < CHARLENGTH; i++) {
             if (command[i] == '\n') {
                 command[i] = '\0';
                 break;
             }
         }
+       
+        storeCommands(command, saved, f); // move all commands into parsed list
+        
+        while(saved[0] != '\0') {
+            if (f->Flags.testing) {
+                printf("entering reactor loop loop\n");
+            }
+            
+            // free command and reassign
+            free(command);
+            command = getCommands(saved, f); //get next command
+            
+            // print flags
+            if (f->Flags.testing) {
+                printf("--- FLAGS ---\n");
+                printf("\tpipeIn: %d\n", f->Flags.pipeIn);
+                printf("\tpipeOut: %d\n", f->Flags.pipeOut);
+                printf("\tbg: %d\n", f->Flags.bg);
+                printf("-------------\n");
+            }
+            
+            // exit shell
+            if (strcmp(command, "exit") == 0) {
+                printf("Exiting Shell...\n");
+                exit(0);
+            }
+		
+		    // parse the command 
+		    parseCommand(command, f);
+		}
+    }
+    
+    free(command);
+    free(saved);
+    
+    return 0;
+}
 
-        // testing output
-        if ( f->Flags.testing == true) {
-            printf("%s\n", command);
+void storeCommands (char *line, char* saved, BITFLAGS* f) {
+    int i = 0;
+    
+    for ( i; i < CHARLENGTH; i++) {
+        if(line[i] == '\n') {
+            saved[i] = '\0';
+            break;
         }
+<<<<<<< HEAD
 		
 		// parse the command 
 		else {parseCommand(command, f);}
+=======
+        
+        saved[i] = line[i]; //copy user input
     }
-	
+    
+    if(f->Flags.testing) {
+        printf("storeCommands:\n\t%s\n", saved);
+    }
+    
+    return;
+}
+
+char * getCommands (char* saved, BITFLAGS *f) {
+    char *temp = (char*) malloc(CHARLENGTH * sizeof(char));
+    int i = 0, j = 0;
+    
+    if (saved[0] == '\0') {
+        temp[0] = '\0';
+        
+        return temp;
+    }
+    
+    // copy till ; or |
+    for ( i = 0; i < CHARLENGTH; i++) {
+        if (saved[i] == ';') {
+            i++;
+            break;
+        }
+        
+        if (saved[i] == '|') {
+            i++;
+            f->Flags.pipeIn = true;
+            break;
+        }
+        
+        if (saved[i] == '\0') {
+            break;
+        }
+        
+        temp[j++] = saved[i];
+>>>>>>> 45d9adbb04be4fbf9948097735693512e3d2af72
+    }
+    
+    // add null terminator to temp
+    temp[j] = '\0';
+    
+    //check for bg
+    if (strstr(temp, " &\0")) {
+        f->Flags.bg = true;
+        temp[--j] = '\0';
+    }
+    
+    // reset j, increment i
+    j = 0;
+    
+    // copy saved over saved till null terminator
+    for ( i; i < CHARLENGTH; i++) {
+        if (saved[i] == '\0') {
+            saved[j] = '\0';
+            break;
+        }
+        
+        saved[j++] = saved[i];
+    }
+    
+    // testing output
+    if (f->Flags.testing) {
+        printf("getCommands:\n");
+        printf("\tNext command: %s\n", temp);
+        printf("\tRemaining commands: %s\n", saved);
+    }
+    
+    return temp;
 }
 
 // sets default values for flags
@@ -361,8 +487,15 @@ char ** resolvePaths(char **args, BITFLAGS *f)
 	 }
 	int i = 0;
 	for(; args[i] != NULL; i++) {
+<<<<<<< HEAD
 		args[i] = expandPath(args[i], isCommand(args, i, f), f); 
 		printf("ARGS[%i]: %s\n", i, args[i]);
+=======
+		args[i] = expandPath(args[i], isCommand(args, i), f); 
+		if (f->Flags.testing) {
+		    printf("ARGS[%i]: %s\n", i, args[i]);
+	    }
+>>>>>>> 45d9adbb04be4fbf9948097735693512e3d2af72
 	}
 	return args;
 }
@@ -848,9 +981,15 @@ int isBuiltIn(char * command)
 //copies arg to an index and nulls the rest of the elements
 char ** argsCopy(char ** args, int index)
 {
+<<<<<<< HEAD
 	int j = 0; 
 	int i = 0;
 	int flag = 0;
+=======
+    if (f->Flags.testing){
+	    printf("Executing...\n");
+	}
+>>>>>>> 45d9adbb04be4fbf9948097735693512e3d2af72
 	
 	//shift contents of args
 	for(; args[i] != NULL; i++) {
@@ -899,7 +1038,7 @@ int builtinLauncher(char ** cmd, struct timeval start)
 {
 	int i = 0;
 	
-	if(isBuiltIn(cmd[0]) >= 0) {
+	/*if(isBuiltIn(cmd[0]) >= 0) {
 		//exit the shell
 		if(strncmp(cmd[0], "exit", 4) == 0) {
 			(*builtin_func1[i])(cmd); 
@@ -969,6 +1108,7 @@ int redirectHelper(char **cmd, int val)
 		}
 	}
 		
+<<<<<<< HEAD
 	if(fd == -1) {printf("Error\n"); return -1;}
 	else{return fd;}
 }	
@@ -1276,3 +1416,43 @@ char ** executeCommands(char **cmd, BITFLAGS*f)
 	return NULL;
 	}
 }
+=======
+	}*/
+	
+	if (f->Flags.bg) {
+	    // bg process
+	    printf("run process in bg.\n");
+	} else {
+	    // not bg process
+        if ((pid = fork()) == -1) {
+    		perror("fork error");
+    	}
+           
+        else if (pid == 0) {
+    		execv(cmd[0], cmd);
+            printf("Return not expected. Must be an execv error.n\n");
+        }
+    	else {
+    		waitpid(pid, &status, 0);
+    		
+    		//stop etime timer and print time lapse 
+    		if(strncmp(c, "etime", 5) == 0) {
+    			(*builtin_func3[i])(cmd, 0, start); 
+    		}
+    		
+    		//build path to pid/io and read file 
+    		if(strncmp(c, "io", 2) == 0) {
+    			(*builtin_func4[i])(cmd, 1); 
+    		}		
+        }
+    }
+	return NULL;
+}
+
+void flipPipe(BITFLAGS *f) {
+    if(f->Flags.pipeIn) {
+        f->Flags.pipeIn = false;
+        f->Flags.pipeOut= true;
+    }
+}
+>>>>>>> 45d9adbb04be4fbf9948097735693512e3d2af72
