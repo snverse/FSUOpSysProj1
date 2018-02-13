@@ -230,6 +230,7 @@ int initFlags (BITFLAGS *f) {
     return 0;
 }
 
+//sets bit flag mode
 int setFlags (BITFLAGS *f, int argc, char **argv) {
     initFlags(f);
 
@@ -389,8 +390,6 @@ bool validCommand(char ** args)
 	return true;
 }	
 
-
-
 //parses the command line into separate arguments 
 char ** parseCommand(char *line, BITFLAGS *f) 
 {
@@ -409,7 +408,7 @@ char ** parseCommand(char *line, BITFLAGS *f)
 	}
 	
 	else {
-		printf("Command not Valid\n");
+		printf("Command not valid\n");
 	}
 	return NULL;
 }	
@@ -498,9 +497,8 @@ int isCommand(char **args, int i, BITFLAGS *f)
 	
 	if(strcmp(args[i], "cd") == 0) {return 2;}
 	
-	if(c != NULL && !isSpecialChar(args[i][0]) && args[i][0] != '.' && args[i][0] != '~') {
-		return 3;
-	}
+	if(c != NULL && !isSpecialChar(args[i][0]) && strcmp(args[i], "echo") != 0 && 
+		args[i][0] != '.' && args[i][0] != '~') {return 3;}
 	
 	if(*args[i] == '>' || 
 		*args[i] == '<' ||
@@ -807,6 +805,7 @@ bool isDir(const char *path)
 
 //list of builtin commands and corresponding functions
 char *builtin_cmd[] = {
+	"echo",
 	"cd",
 	"etime",
 	"exit",
@@ -834,13 +833,6 @@ int cd_lsh(char **args)
 		args[1] = buildPath(args[1], "PWD");
 	}
 	
-	/*
-	if(args[1][0] == '>' || args[1][0] == '<' 
-		|| args[1][0] == '&' || args[1][0] == '|') {
-			printf("Error: changing to invalid directory\n");
-			return 1;
-		}
-	*/
 	if(pathExist(args[1]) && isDir(args[1])) {
 		//printf("args[1]: %s\n", args[1]); 
 		chdir(args[1]); 
@@ -921,6 +913,31 @@ int io_lsh(char **args, int flag)
 	return 1;
 }
 
+void echo_lsh(char **args)
+{
+	char output[1024];
+	char * o = output; 
+	int i = 1;
+	int j = 0;
+	int k = 0;
+	
+	//copy argument char ** into single char * 
+	for(; args[i] != NULL; i++) {
+		//printf("args[%]: %s\n", i, args[i]);
+		for(; j < strlen(args[i]); j++) {
+			output[k++] = args[i][j];
+		}
+	}
+	output[k] = '\0';
+	
+	int p = 0;
+	for(; p < k; p++) {
+		printf("echo[%i]: %s\n", p, output[p]);  
+	}
+	
+	printf("%s\n", o); 
+}
+
 //exit function 
 int exit_lsh(char **args)
 {
@@ -942,6 +959,10 @@ int (*builtin_func3[]) (char **, int, struct timeval) = {
 
 int (*builtin_func4[]) (char **, int) = {
 	&io_lsh
+};
+
+int (*builtin_func5[]) (char **) = {
+	&echo_lsh
 };
 
 int getNumBuiltIns()
@@ -1035,7 +1056,11 @@ int builtinLauncher(char ** cmd, struct timeval start)
 		else if(strncmp(cmd[0], "io", 2) == 0) {
 			(*builtin_func4[i])(cmd, 0); 
 			return 2;
-		}	
+		}
+		//echo 
+		else if(strncmp(cmd[0], "echo", 4) == 0) {
+			(*builtin_func5[i])(cmd);
+		}
 	}
 	
 	return 0;
@@ -1106,19 +1131,14 @@ char * newLineRemove(char * buffer)
 	return nb;
 }
 
-bool pipeScan(char ** args)
+bool pipeScan(char ** args, BITFLAGS *f)
 {
-	int i = 0;
-	int j = 0;
+	printf("Scanning pipe\n");
 	
-	for(; args[i] != NULL; i++) {
-		for(j = 0; j < strlen(args[i]); j++) {
-			if(args[i][j] == '|') {return true;}
-		}
-	}		
-	return false;
+	if (f->Flags.pipeIn) {flipPipe(f); return true;} 
+	return false; 
 }
-
+/*
 int indexOfNextPipe(char ** cmd)
 {
 	int i =0;
@@ -1202,7 +1222,7 @@ char ** nextCommand(char ** pipeBay, int start, int end)
 	
 	return nCommand; 
 }
-
+*/
 char ** nullify(char ** cmd) 
 {
 	int i = 0;
@@ -1262,7 +1282,7 @@ char ** executeCommands(char **cmd, BITFLAGS*f)
 	int pipeFlag = 0;
 	int pipefd[2];
 	int in;
-	char ** pipeBay = (char**) malloc(sizeof(char**) * getCmdArraySize(cmd));
+	//char ** pipeBay = (char**) malloc(sizeof(char**) * getCmdArraySize(cmd));
 	int length; //= getNumPipes(cmd);
 	
 	//etime start  
@@ -1270,40 +1290,39 @@ char ** executeCommands(char **cmd, BITFLAGS*f)
 	//if not a builtin
 	if(launch  == -1) {return NULL;}
 	
-	
-	
+	/*
 	//check if piping 
-		if(pipeScan(cmd)) {
+	if(pipeScan(cmd, f)) {
+		printf("I CONTAIN A PIPE\n");
+		
+		int k = 0; 
+		//pipeBay = pipeCopy(cmd);
+		int begin = 0;
+		int end = 0;
+		int x = 0;
+		int index;
+		int counter; 
 			
-			printf("I CONTAIN A PIPE\n");
-			int k = 0; 
-			pipeBay = pipeCopy(cmd);
-			int begin = 0;
-			int end = 0;
-			int x = 0;
-			int index;
-			int counter; 
+		//get number of pipes 
+		for(; cmd[x] != NULL; x++) {if(contains(cmd[x],'|')) {length++;}}
+		printf("running pipe-loop: %i times\n", length); 
 			
-			//get number of pipes 
-			for(; cmd[x] != NULL; x++) {if(contains(cmd[x],'|')) {length++;}}
-			printf("running pipe-loop: %i times\n", length); 
+		//the first process should get its input from the original file descriptor 
+		in = 0;
 			
-			//the first process should get its input from the original file descriptor 
-			in = 0;
-			
-			//note the loop bound, we spawn ere all, but the last stage of the pipeline
-			for(; k < length; k++) {
-				pipe(pipefd);
+		//note the loop bound, we spawn ere all, but the last stage of the pipeline
+		for(; k < length; k++) {
+			pipe(pipefd);
 				
-				// builld current command 
-				end = indexAtPipeItr(pipeBay, k); 
+			// builld current command 
+			end = indexAtPipeItr(pipeBay, k); 
 			
-				cmd = nullify(cmd);
-				index = 0; 
+			cmd = nullify(cmd);
+			index = 0; 
 				
-				//get current cmd 
-				for(counter = begin; counter < end; counter++) {
-					cmd[index++] = pipeBay[counter];}
+			//get current cmd 
+			for(counter = begin; counter < end; counter++) {
+				cmd[index++] = pipeBay[counter];}
 				
 				begin = end + 1;
 				
@@ -1313,9 +1332,6 @@ char ** executeCommands(char **cmd, BITFLAGS*f)
 				close(pipefd[1]); 
 				//keeps the read end of the pipe, the next child will read from there
 				in = pipefd[0];
-				//printf("nextCommand: %s\n", cmd[0]); 
-				//int g = 0;
-				//for(; cmd[g] != NULL; g++) {printf("nextCommand: cmd[%i]: %s\n", g, cmd[g]);}
 				//printf("Return not expected. Must be an execv error.n\n");
 			}		
 			//final stage of pipeline -set stdin be the read end of the previous pipe 
@@ -1335,92 +1351,57 @@ char ** executeCommands(char **cmd, BITFLAGS*f)
 			printf("Return not expected. Must be an execv error.n\n");
 			return NULL;
 		}
-	
+	*/
 	//child 
-	else {
-    if (pid=fork() == 0) {
+	//else {
+		if (pid=fork() == 0) {
+			//determine redirect values 
+			//if not redirect, helper function 
+			//will know and ignore 
+			fd = redirectHelper(cmd, 0);
+			j = redirectHelper(cmd, 1);
+			redirectFlag = redirectHelper(cmd, 2);  
 		
-			
-		
-		//determine redirect values 
-		//if not redirect, helper function 
-		//will know and ignore 
-		fd = redirectHelper(cmd, 0);
-		j = redirectHelper(cmd, 1);
-		redirectFlag = redirectHelper(cmd, 2);  
-	
-		//input redirection
-		if(redirectFlag == 1)
-		{
-			cmd = inputRedirect(cmd, j);
-			close(STDIN_FILENO);
-			dup2(fd, 1);
-			dup2(fd, 2);
-			close(fd);
+			//input redirection
+			if(redirectFlag == 1) {
+				cmd = inputRedirect(cmd, j);
+				close(STDIN_FILENO);
+				dup2(fd, 1);
+				dup2(fd, 2);
+				close(fd);
+			}
+			//output redirection 
+			else if (redirectFlag == 2) {	 
+				read(fd, buffer, 255); 
+				b = newLineRemove(b);
+				cmd = outputRedirect(cmd, b, j);
+			}
+			//check if pipe
+			else if(pipeScan(cmd, f) {
+				
+			}
+			//execute commads 
+			execv(cmd[0], cmd);
+			printf("Return not expected. Must be an execv error.n\n");
 		}
-		//output redirection 
-		else if (redirectFlag == 2)
-		{	 
-			read(fd, buffer, 255); 
-			b = newLineRemove(b);
-			cmd = outputRedirect(cmd, b, j);
+		else {
+			waitpid(pid, &status, 0); 
+			if(redirectFlag == 1) {close(fd);}
+			
+			if(pipeFlag == 1) {
+			
+				printf("Pipe flag raised\n");
+				char buffer[255];
+				//close the write end of the pipe in the parent
+				close(pipefd[1]); 
+			
+				while(read(pipefd[0], buffer, sizeof(buffer)) != 0) {}
+				printf("buffer: %s\n", buffer);
+			}
+		
+			//facilitates closing phase of builtins 
+			land = builtinLander(c, cmd, start); 
 		}
-		//execute commads 
-		execv(cmd[0], cmd);
-        printf("Return not expected. Must be an execv error.n\n");
-    }
-	else {
-		if(pipeFlag == 0) {//wait for child 
-		waitpid(pid, &status, 0);} 
-		
-		if(redirectFlag == 1) {close(fd);}
-		//if(pipeFlag == 1) {
-			
-			//printf("Pipe flag raised\n");
-			//char buffer[255];
-			//close the write end of the pipe in the parent
-			//close(pipefd[1]); 
-			
-			//while(read(pipefd[0], buffer, sizeof(buffer)) != 0) {}
-			//printf("buffer: %s\n", buffer);
-		//}
-		
-		
-		//facilitates closing phase of builtins 
-		land = builtinLander(c, cmd, start); 
-	}
-	return NULL;
-	}
-}
-
-/*	
-	if (f->Flags.bg) {
-	    // bg process
-	    printf("run process in bg.\n");
-	} else {
-	    // not bg process
-        if ((pid = fork()) == -1) {
-    		perror("fork error");
-    	}
-           
-        else if (pid == 0) {
-    		execv(cmd[0], cmd);
-            printf("Return not expected. Must be an execv error.n\n");
-        }
-    	else {
-    		waitpid(pid, &status, 0);
-    		
-    		//stop etime timer and print time lapse 
-    		if(strncmp(c, "etime", 5) == 0) {
-    			(*builtin_func3[i])(cmd, 0, start); 
-    		}
-    		
-    		//build path to pid/io and read file 
-    		if(strncmp(c, "io", 2) == 0) {
-    			(*builtin_func4[i])(cmd, 1); 
-    		}		
-        }
-    }
 	return NULL;
 }
 
@@ -1430,4 +1411,3 @@ void flipPipe(BITFLAGS *f) {
         f->Flags.pipeOut= true;
     }
 }
-*/
