@@ -1222,7 +1222,6 @@ char ** nextCommand(char ** pipeBay, int start, int end)
 	
 	return nCommand; 
 }
-*/
 char ** nullify(char ** cmd) 
 {
 	int i = 0;
@@ -1259,7 +1258,7 @@ int spawn_proc (int in, int out, char **cmd)
 
   return pid1;
 }
-
+*/
 
 //execute commmands 
 char ** executeCommands(char **cmd, BITFLAGS*f)
@@ -1354,6 +1353,7 @@ char ** executeCommands(char **cmd, BITFLAGS*f)
 	*/
 	//child 
 	//else {
+		pipe(pipefd);
 		if (pid=fork() == 0) {
 			//determine redirect values 
 			//if not redirect, helper function 
@@ -1377,8 +1377,20 @@ char ** executeCommands(char **cmd, BITFLAGS*f)
 				cmd = outputRedirect(cmd, b, j);
 			}
 			//check if pipe
-			else if(pipeScan(cmd, f) {
+			else if(pipeScan(cmd, f)) {
 				
+				printf("This is a pipe!\n");
+				
+				//close reading end in the child
+				close(pipefd[0]);
+				//send stdout to the pipe 
+				dup2(pipefd[1], 1);
+				//send stder to the pipe
+				dup2(pipefd[1], 2);
+				
+				//close(pipefd[1]); 
+				
+				pipeFlag = 1; 
 			}
 			//execute commads 
 			execv(cmd[0], cmd);
@@ -1391,7 +1403,9 @@ char ** executeCommands(char **cmd, BITFLAGS*f)
 			if(pipeFlag == 1) {
 			
 				printf("Pipe flag raised\n");
-				char buffer[255];
+				
+				char buffer[1024];
+				
 				//close the write end of the pipe in the parent
 				close(pipefd[1]); 
 			
