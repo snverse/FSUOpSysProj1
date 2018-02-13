@@ -122,6 +122,7 @@ int reactorLoop (BITFLAGS *f) {
                 printf("\tpipeIn: %d\n", f->Flags.pipeIn);
                 printf("\tpipeOut: %d\n", f->Flags.pipeOut);
                 printf("\tbg: %d\n", f->Flags.bg);
+                printf("\tempty: %d\n", f->Flags.empty);
                 printf("-------------\n");
             }
             
@@ -187,6 +188,7 @@ char * getCommands (char* saved, BITFLAGS *f) {
         }
         
         if (saved[i] == '\0') {
+            f->Flags.empty = true;
             break;
         }
         
@@ -406,12 +408,14 @@ char ** parseCommand(char *line, BITFLAGS *f)
 		args = resolvePaths(args, f);
 		executeCommands(args, f);
 		free(args); 
-	return args; 
+	    return args; 
 	}
 	
 	else {
 		printf("Command not valid\n");
 	}
+	
+	//free(args);
 	return NULL;
 }	
 
