@@ -121,7 +121,7 @@ Davis Phillips
 	-piping
 	
 Bryce Vokus
-	-nothing to report 
+	-
 	
 ===============================================
 Slack Days Used:
@@ -129,7 +129,7 @@ Slack Days Used:
 
 Nicholas Kelton: too many 
 Davis Phillips: 
-Bryce Vokus: everyday minus one 
+Bryce Vokus: 
 
 ================================================
 Log:

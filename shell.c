@@ -7,7 +7,7 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <ctype.h>
-#include <stdlib.h>
+#include <fcntl.h>
 
 // true and false
 #define true 1
@@ -40,13 +40,12 @@ char ** parseCommand                (char *line, BITFLAGS *f);
 char ** parseArguments              (char *line, BITFLAGS *f);
 char ** resolvePaths                (char **args, BITFLAGS *f);
 char ** executeCommands             (char **args, BITFLAGS *f);
-int     isCommand                   (char **args, int i);
+int     isCommand                   (char **args, int i, BITFLAGS *f);
 char *  expandPath                  (char *path, int cmd_p, BITFLAGS *f);
-char * 	appendPath					(char *path, const char *append);
-char * 	getPathFromEnv				(const char *env);
 char ** split						(const char *path, const char ch);
 char * 	buildPath					(char *path, const char *envVar);
 char ** shiftArgs					(char **args);
+char *	expandBuiltIn				(char * path, BITFLAGS *f);
 bool	contains 					(const char *path, const char ch);
 bool 	pathExist					(const char *path);
 bool 	isFile						(const char *path);
@@ -99,14 +98,6 @@ int reactorLoop (BITFLAGS *f) {
         if ( f->Flags.testing == true) {
             printf("%s\n", command);
         }
-        
-		/*
-        // exit shell
-        if (strncmp(command, "exit ", 5) == 0) {
-            printf("Exiting Shell...\n");
-            return 0;
-        }
-		*/
 		
 		// parse the command 
 		else {parseCommand(command, f);}
@@ -241,6 +232,47 @@ int getBucketLength(const char *line, const char ch)
 	return counter * 2; 
 }
 
+int argSize(char ** args)
+{
+	int i = 0;
+	for(; args[i] != NULL; i++) {}
+	return i; 
+}
+
+
+bool validCommand(char ** args)
+{
+	int i = 0;
+	int j;
+	int size = argSize(args); 
+	//iterate through args
+	for(; args[i] != NULL; i++) {
+		//io redirection
+		if(contains(args[i], '>') && size <= 2) {
+			if(args[i][0] == '>') {return false;}
+			if(args[i][1] != '>') {return false;}
+		}
+		else if(contains(args[i], '<') && size <= 2) {
+			if(args[i][0] == '<') {return false;}
+			if(args[i][1] != '<') {return false;}
+		}
+		else if(contains(args[i], '|') && size <= 2) {
+			if(args[i][0] == '|') {return false;}
+			if(args[i+1] == NULL && args[i][0] == '|') {return false;}
+		}
+		else if(contains(args[i], '&')) {
+			for(j = 0; j < strlen(args[i]); j++) {
+				if(args[i][j] == '&' && args[i][j+1] == '|') {return false;}
+				if(args[i][j] == '>' && args[i][j+1] == '&') {return false;}
+				if(args[i][j] == '<' && args[i][j+1] == '&') {return false;}
+			}
+		}
+	}
+	return true;
+}	
+
+
+
 //parses the command line into separate arguments 
 char ** parseCommand(char *line, BITFLAGS *f) 
 {
@@ -250,12 +282,18 @@ char ** parseCommand(char *line, BITFLAGS *f)
 	    printf("inside my parse: %s\n", line);	
     }
 	args = parseArguments(line, f); 
-	args = resolvePaths(args, f);
 	
-	executeCommands(args, f);
-	
-	free(args); 
+	if(validCommand(args)) {
+		args = resolvePaths(args, f);
+		executeCommands(args, f);
+		free(args); 
 	return args; 
+	}
+	
+	else {
+		printf("Command not Valid\n");
+	}
+	return NULL;
 }	
 
 //parses line into array of string arguments 
@@ -323,7 +361,7 @@ char ** resolvePaths(char **args, BITFLAGS *f)
 	 }
 	int i = 0;
 	for(; args[i] != NULL; i++) {
-		args[i] = expandPath(args[i], isCommand(args, i), f); 
+		args[i] = expandPath(args[i], isCommand(args, i, f), f); 
 		printf("ARGS[%i]: %s\n", i, args[i]);
 	}
 	return args;
@@ -336,19 +374,23 @@ returns
 2 cd, 
 3 for other built-in commands 
 */
-int isCommand(char **args, int i) 
+int isCommand(char **args, int i, BITFLAGS *f) 
 {
+	//char command[255]'
+	//char *
+	char * c = expandBuiltIn(args[i], f);
+	
+	if(strcmp(args[i], "cd") == 0) {return 2;}
+	
+	if(c != NULL && !isSpecialChar(args[i][0]) && args[i][0] != '.' && args[i][0] != '~') {
+		return 3;
+	}
+	
 	if(*args[i] == '>' || 
 		*args[i] == '<' ||
 		*args[i] == '&' ||
 		*args[i] == '|') {return 1;}
 	
-	if(strcmp(args[i], "cd") == 0) {return 2;}
-	
-	if(strcmp(args[i], "echo") == 0 ||
-		strcmp(args[i], "sleep") == 0 ||
-		strcmp(args[i], "ls") == 0) {return 3;} 
-			
 	else {return 0;}
 }
 
@@ -410,10 +452,9 @@ char * parentDirBuilder(char * path, BITFLAGS *f)
 		printf("building parent directory...\n"); 
 	}
 	
-	
 	char *currPath = getenv("PWD");
 	
-	if(isRoot(currPath)) {printf("ROOT REACHED!\n"); currPath ="/"; return currPath;}
+	if(isRoot(currPath)) {printf("Error: parent is root directory\n"); currPath ="/"; return currPath;}
 	
 	int nlength = getParentIndex(currPath);
 	char *parentPath = malloc(sizeof(char*) * (nlength + (strlen(path)-2))); 
@@ -425,6 +466,20 @@ char * parentDirBuilder(char * path, BITFLAGS *f)
 	return NULL; 
 }
 
+//returns name of current user
+char * getUser()
+{
+	char *home = getenv("HOME");
+	int offset = getParentIndex(home) + 1;
+	
+	char user[20];
+	char *u = user; 
+	 
+	strcpy(u, home+offset);
+	return u; 
+}
+
+
 //removes $KEYWORD in path and replaces with corresponding path 
 char * envPathAmmend(char * path, char * envVar, BITFLAGS *f) 
 {
@@ -432,7 +487,7 @@ char * envPathAmmend(char * path, char * envVar, BITFLAGS *f)
 		printf("ammending envionrmental path...\n"); 
 	}
 	
-	//if(strcmp(envVar, "SHELL") == 0) {return path = "shell"; return path;}
+	if(strcmp(envVar, "NAH") == 0) {printf("Input error. Invalid Environemntal Variable\n"); return NULL;}
 	
 	char *currPath = getenv(envVar); 
 	int keyword = strlen(envVar) + 1; 
@@ -462,32 +517,18 @@ char *expandBuiltIn(char *path, BITFLAGS *f) {
 		strcat(p, "/"); 
 		strcat(p, path);
 
-		//printf("p: %s\n", p);
 		if(isPath2BuiltIn(p)) {return p;}
-		/*
-		if(pathExist(p)) {return p;}
-		if(isFile(p)) {return p;}
-		if(isDir(p)) {return p;}
-		*/
-	}
-	
+	}	
 	return NULL;
 }
 
 //checks if path leads to executable
 bool isPath2BuiltIn(const char * path)
-{
-	/*
-	struct stat sb; 
-	if(stat(path, &sb) == 0 && sb.st_mode & S_IXUSR) {return true;}
-	else {return false;}
-	*/
-	
+{	
 	if(access(path, X_OK)) {
 		return false;
 	}
-	else {return true;}  
-	
+	else {return true;}  	
 }
 
 //get environemt 
@@ -495,9 +536,10 @@ char * getEnvironment(const char *path)
 {
 	char *env = NULL; 
 	if(strncmp(path, "$PWD", 4) == 0) {env = "PWD";}
-	if(strncmp(path, "$HOME", 5) == 0) {env = "HOME";}
-	if(strncmp(path, "$SHELL", 6) == 0) {env = "SHELL";}
-	if(strncmp(path, "$USER", 5) == 0) {env = "USER";}
+	else if(strncmp(path, "$HOME", 5) == 0) {env = "HOME";}
+	else if(strncmp(path, "$SHELL", 6) == 0) {env = "SHELL";}
+	else if(strncmp(path, "$USER", 5) == 0) {env = "USER";}
+	else {env = "NAH";}
 	return env; 
 }
 
@@ -523,34 +565,35 @@ char * expandPath(char *path, int cmd_p, BITFLAGS *f)
 	//for arguments
 	if(cmd_p == 0) {
 		if(contains(path, '$')) {
+			if(strcmp(path, "$USER") == 0) {char *q = getUser(); return q; }
 			path = envPathAmmend(path, getEnvironment(path), f); 
 			if(pathExist(path)) {return path;}
-			else {return NULL;}
+			else {printf("path does not exists\n"); return NULL;}
 		}
 		if(contains(path, '~')) {
 			path = homePathBuilder(path, f);
 			if(pathExist(path)) {return path;}
-			else{return NULL;}
+			else{printf("path does not exists\n"); return NULL;}
 		}
 		if(contains(path, '.')) { 
 			//expand parent directory 
 			if(path[0] == '.' && path[1] == '.') {
 				path = parentDirBuilder(path, f);
 				if(pathExist(path)) {return path;}
-				else {return NULL;}
+				else {printf("path does not exists\n"); return NULL;}
 			}
 			//expand current working directoy
 			if(path[0] == '.') {
 				path = currentDirPathBuilder(path, f);
 				if(pathExist(path)) {return path;}
-				else {return NULL;}
+				else {printf("path does not exists\n"); return NULL;}
 			}
 		}
 		if(contains(path, '/')) { 
 			path = buildPath(path, "PWD");
 			printf("After buildPath: %s\n", path); 
 			if(pathExist(path)) {return path;}
-			else{return NULL;}
+			else{printf("path does not exists\n"); return NULL;}
 		}
 		//treat as either file or directory
 		else {
@@ -561,23 +604,7 @@ char * expandPath(char *path, int cmd_p, BITFLAGS *f)
 	return NULL;
 }
 
-//returns environment path
-char * getPathFromEnv(const char * env)
-{
-	char envPath[strlen(getenv(env))+1];
-	char *eP = envPath;
-	char *e = getenv(env);
-	int i = 0;
-	
-	for(; i < strlen(getenv(env)); i++) {
-		envPath[i] = e[i];
-	}
-	envPath[i] = '\0';	
-	
-	//printf("getPathFromEnv: %s\n", eP); 
-	return eP; 
-}
-
+//determines if path leads to root 
 bool isRoot(char * path)
 {
 	char * root1 = "/home";
@@ -585,12 +612,6 @@ bool isRoot(char * path)
 	if (strcmp(path, root1) == 0 ||
 		strcmp(path,root2) == 0) {return true;}
 	return false;
-}
-
-//appends directory to end of path
-char * appendPath(char * path, char const * append)
-{
-	return strcat(strcat(path, "/"), append);
 }
 
 //gets value from environmental variable and tests each with passed in path
@@ -601,15 +622,9 @@ char * buildPath(char * path, const char * envVar)
 	char * newPath = malloc(sizeof(char*) * length);
 	
 	strcpy(newPath, currPath);
-	
-	//printf("newPath1: %s\n", newPath);
 	strcat(newPath, "/");
-	//printf("newPath2: %s\n", newPath);
 	strcat(newPath, path);
-	//printf("newPath3: %s\n", newPath); 
 	
-	//newPath[size-1] = '\0';
-	//printf("finalPath: %s\n", np);
 	if(pathExist(newPath)) {return newPath;}
 	return NULL;
 }
@@ -683,13 +698,16 @@ char *builtin_cmd[] = {
 	"io"
 };
 
-int cd_lsh(char  **args) 
+int cd_lsh(char **args) 
 {
-	printf("changing to directory: %s\n", args[1]); 
+	//printf("changing to directory: %s\n", args[1]); 
+	
+	if(args[2] != NULL) {
+		printf("Error: too many arguments\n");
+		return 2;
+	}
 	
 	if(args[1] == NULL) {
-		printf("NULL terminal running\n");
-		//printf("defaultPath: %s\n", defaultPath); 
 		chdir(getenv("HOME")); 
 		setenv("PWD", getenv("HOME"), 1);
 		return 0;
@@ -697,14 +715,23 @@ int cd_lsh(char  **args)
 	
 	//if arg is single word, append current directory 
 	if(!contains(args[1], '/')) {
-		printf("!contains terminal running\n");
+		//printf("!contains terminal running\n");
 		args[1] = buildPath(args[1], "PWD");
 	}
 	
-	printf("args[1]: %s\n", args[1]); 
-	chdir(args[1]); 
-	setenv("PWD", args[1], 1);
-	
+	/*
+	if(args[1][0] == '>' || args[1][0] == '<' 
+		|| args[1][0] == '&' || args[1][0] == '|') {
+			printf("Error: changing to invalid directory\n");
+			return 1;
+		}
+	*/
+	if(pathExist(args[1]) && isDir(args[1])) {
+		//printf("args[1]: %s\n", args[1]); 
+		chdir(args[1]); 
+		setenv("PWD", args[1], 1);
+	}
+	else{printf("Error: changing to invalid directory\n");}
 	return 1; 
 }
 
@@ -736,6 +763,7 @@ int etime_lsh(char ** args, int choice, struct timeval init_t)
 	}
 }
 
+//shift Args by 1
 char **shiftArgs(char ** args)
 {
 	int i = 1;
@@ -751,7 +779,7 @@ char **shiftArgs(char ** args)
 	return args;
 }
 
-
+//facilitate io 
 int io_lsh(char **args, int flag)
 {
 	if(flag == 0) {args = shiftArgs(args);}
@@ -778,6 +806,7 @@ int io_lsh(char **args, int flag)
 	return 1;
 }
 
+//exit function 
 int exit_lsh(char **args)
 {
 	printf("Exiting Shell...\n"); 
@@ -805,6 +834,7 @@ int getNumBuiltIns()
 	return sizeof(builtin_cmd) / sizeof(char*); 
 }
 
+//determins if a commands is a builtin 
 int isBuiltIn(char * command)
 {
 	int i = 0;
@@ -815,6 +845,286 @@ int isBuiltIn(char * command)
 	return -1;
 }
 
+//copies arg to an index and nulls the rest of the elements
+char ** argsCopy(char ** args, int index)
+{
+	int j = 0; 
+	int i = 0;
+	int flag = 0;
+	
+	//shift contents of args
+	for(; args[i] != NULL; i++) {
+		if(args[i] == args[index] || flag == 1)
+		{
+			args[i] = NULL;
+			flag = 1; 
+		}
+		args[i] = args[i]; 
+		printf("redirct args[%i]: %s\n", i, args[i]);
+	}
+	return args; 
+}
+
+//redirect input 
+char ** inputRedirect(char **args, int index)
+{
+	char ** cmd = argsCopy(args, index);
+	return cmd; 
+}
+
+//reorganizes cmd and adds buffer
+char ** outputRedirect(char **args, char *buf, int index)
+{
+	char ** cmd = argsCopy(args, index); 
+	cmd[1] = buf;	
+	return cmd; 
+}
+
+//copy file, used for pointer issues 
+char * getFile(char * file)
+{
+	char newFile[strlen(file)];
+	char * nf = newFile; 
+	int i = 0;
+	for(; i < strlen(file); i++){
+		newFile[i] = file[i];
+	}
+	newFile[i] = '\0';
+	//printf("newFile: %s\n", nf); 
+	return nf; 
+}
+
+//determines builtin functions and launches 
+int builtinLauncher(char ** cmd, struct timeval start)
+{
+	int i = 0;
+	
+	if(isBuiltIn(cmd[0]) >= 0) {
+		//exit the shell
+		if(strncmp(cmd[0], "exit", 4) == 0) {
+			(*builtin_func1[i])(cmd); 
+			return -1;
+		}
+		//change directory 
+		else if(strncmp(cmd[0], "cd", 2) == 0) {
+			(*builtin_func2[i])(cmd); 
+			return -1;
+		}
+		//manupulate cmd** and start timer 
+		else if(strncmp(cmd[0], "etime", 5) == 0) {
+			(*builtin_func3[i])(cmd, 1, start); 
+			return 1;
+		}
+		//io
+		else if(strncmp(cmd[0], "io", 2) == 0) {
+			(*builtin_func4[i])(cmd, 0); 
+			return 2;
+		}	
+	}
+	
+	return 0;
+}
+
+//handles builtins that run over execution
+int builtinLander(char * c, char ** cmd, struct timeval start)
+{
+	int i = 0;
+	//stop etime timer and print time lapse 
+	if(strncmp(c, "etime", 5) == 0) {
+		(*builtin_func3[i])(cmd, 0, start); 
+		return 1;
+	}	
+	//build path to pid/io and read file 
+	if(strncmp(c, "io", 2) == 0) {
+		(*builtin_func4[i])(cmd, 1); 
+		return 2;
+	}
+	
+	return -1; 
+}
+
+//big ugly redirect swiss army knife 
+//val = 0, returns fd
+//val = 1, returns index 
+//val = 2, returns flag 
+int redirectHelper(char **cmd, int val)
+{
+	int j = 0;
+	char * path2File; 
+	int fd; 
+	
+	for(; cmd[j] != NULL; j++) {
+		if(contains(cmd[j], '>')) {
+			path2File = cmd[j+1];//getFile(cmd[j+1]);
+			printf("path2File: %s\n", path2File); 
+			fd = open(path2File, O_WRONLY | O_TRUNC | O_CREAT, 0644);
+			if(val == 1) {return j;}
+			if(val == 2) {return 1;}
+		}
+		else if(contains(cmd[j], '<')) {
+			path2File = cmd[j+1];	//getFile(cmd[j+1]); 
+			fd = open(path2File, O_RDONLY, 0);
+			if(val == 1) {return j;}
+			if(val == 2) {return 2;}
+		}
+	}
+		
+	if(fd == -1) {printf("Error\n"); return -1;}
+	else{return fd;}
+}	
+
+//removes new line for file buffers
+char * newLineRemove(char * buffer)
+{
+	char newBuffer[255]; 
+	char *nb = newBuffer;
+	int i = 0;
+	int j = 0;
+	for(; i < strlen(buffer); i++)
+	{
+		if(isalpha(buffer[i])) {
+			newBuffer[j++] = buffer[i];
+		}
+	}
+	newBuffer[j] = '\0';
+	return nb;
+}
+
+bool pipeScan(char ** args)
+{
+	int i = 0;
+	int j = 0;
+	
+	for(; args[i] != NULL; i++) {
+		for(j = 0; j < strlen(args[i]); j++) {
+			if(args[i][j] == '|') {return true;}
+		}
+	}		
+	return false;
+}
+
+int indexOfNextPipe(char ** cmd)
+{
+	int i =0;
+	for(; cmd[i] != NULL; i++) {
+		if(cmd[i][0] == '|') {printf("indexOFNextPipe: %i\n", i);return i;}
+	}
+	return -1; 
+}
+
+int getNumPipes(char ** cmd)
+{
+	int i = 0; 
+	for(; cmd[i] != NULL; i++) {
+		printf("cmd: %s\n", cmd);
+		if(contains(cmd[i],'|')) {i++;}
+	}
+	//printf("numPipes: %s\n", i);
+	return i;
+	
+}
+
+int getCmdArraySize(char ** cmd)
+{
+	int i = 0;
+	for(; cmd[i] != NULL; i++){}
+	return i;
+}
+
+char ** pipeCopy(char ** cmd)
+{
+	char ** copy = (char**) malloc(sizeof(char**) * getCmdArraySize(cmd));
+	int x = 0;
+	int y = 0;
+	int size; 
+	
+	
+	for(; cmd[x] != NULL; x++) {
+		size = strlen(cmd[x]);
+		copy[x] = malloc(sizeof(char*) * size);
+		for(y = 0; y < size; y++) {
+			copy[x][y] = cmd[x][y];
+		}
+		printf("copy[%i]: %s\n", x, copy[x]);
+	}
+	return copy;
+}
+
+int indexAtPipeItr(char **cmd, int itr)
+{
+	int i = 0;
+	int j = -1;
+	for(; cmd[i] != NULL; i++) {
+		if(cmd[i][0] == '|') {
+			j = j + 1;
+			if(j == itr) {return i;}
+		}
+	}
+	
+}
+
+char ** nextCommand(char ** pipeBay, int start, int end)
+{
+	printf("nextCommand called\n");
+	char ** nCommand = (char**) malloc(sizeof(char**) * (start - end) + 1);
+	int i = start;
+	int j = 0;
+	int k = 0;
+	int size;
+	
+	printf("start %i\n", i);
+	printf("end: %i\n", end);
+	for(; i < end; i++) {
+		size = strlen(pipeBay[i]);
+		nCommand[k++] = malloc(sizeof(char*) * size);
+		for(; j < size; j++) {
+			nCommand[k][j] = pipeBay[i][j];
+			printf("%c\n", nCommand[k][j]);
+		}
+		printf("nCommnd[%i]: %s\n", k, nCommand[k]);
+	}
+	
+	return nCommand; 
+}
+
+char ** nullify(char ** cmd) 
+{
+	int i = 0;
+	for(; cmd[i] != NULL; i++) {
+		cmd[i] = NULL;
+	}
+	return cmd; 
+}
+
+//https://stackoverflow.com/questions/8082932/connecting-n-commands-with-pipes-in-a-shell
+int spawn_proc (int in, int out, char **cmd)
+{
+ printf("spawn_proc called\n");
+ printf("cmd[0]: %s\n", cmd[0]);
+
+ pid_t pid1;
+
+  if ((pid1 = fork ()) == 0)
+    {
+      if (in != 0)
+        {
+          dup2 (in, 0);
+          close (in);
+        }
+
+      if (out != 1)
+        {
+          dup2 (out, 1);
+          close (out);
+        }
+
+      return execv(cmd[0], cmd);
+    }
+
+  return pid1;
+}
+
+
 //execute commmands 
 char ** executeCommands(char **cmd, BITFLAGS*f)
 {
@@ -822,58 +1132,147 @@ char ** executeCommands(char **cmd, BITFLAGS*f)
 	
 	pid_t pid;
 	int status; 
-	int i = 0;
 	char * c = cmd[0];
 	struct timeval start;
-
+	int redirectFlag = 0; 
+	int fd; 
+	char * path2File;
+	char buffer[255];
+	char * b = buffer;
+	int j = 0;
+	int i = 0; 
+	int launch = builtinLauncher(cmd, start);
+	int land; 
+	int pipeFlag = 0;
+	int pipefd[2];
+	int in;
+	char ** pipeBay = (char**) malloc(sizeof(char**) * getCmdArraySize(cmd));
+	int length; //= getNumPipes(cmd);
 	
-	if(isBuiltIn(cmd[0]) >= 0) {
-		//exit the shell
-		if(strncmp(cmd[0], "exit", 4) == 0) {
-			(*builtin_func1[i])(cmd); 
+	//etime start  
+	if(launch == 1) {gettimeofday(&start, NULL);}
+	//if not a builtin
+	if(launch  == -1) {return NULL;}
+	
+	
+	
+	//check if piping 
+		if(pipeScan(cmd)) {
+			
+			printf("I CONTAIN A PIPE\n");
+			int k = 0; 
+			pipeBay = pipeCopy(cmd);
+			int begin = 0;
+			int end = 0;
+			int x = 0;
+			int index;
+			int counter; 
+			
+			//get number of pipes 
+			for(; cmd[x] != NULL; x++) {if(contains(cmd[x],'|')) {length++;}}
+			printf("running pipe-loop: %i times\n", length); 
+			
+			//the first process should get its input from the original file descriptor 
+			in = 0;
+			
+			//note the loop bound, we spawn ere all, but the last stage of the pipeline
+			for(; k < length; k++) {
+				pipe(pipefd);
+				
+				// builld current command 
+				end = indexAtPipeItr(pipeBay, k); 
+			
+				cmd = nullify(cmd);
+				index = 0; 
+				
+				//get current cmd 
+				for(counter = begin; counter < end; counter++) {
+					cmd[index++] = pipeBay[counter];}
+				
+				begin = end + 1;
+				
+				//f[1] is the write end of the pipe, we carry 'in' from the prev itr
+				spawn_proc(in, pipefd[1], cmd);
+				//no need for the write end of the pipe, the child will write here 
+				close(pipefd[1]); 
+				//keeps the read end of the pipe, the next child will read from there
+				in = pipefd[0];
+				//printf("nextCommand: %s\n", cmd[0]); 
+				//int g = 0;
+				//for(; cmd[g] != NULL; g++) {printf("nextCommand: cmd[%i]: %s\n", g, cmd[g]);}
+				//printf("Return not expected. Must be an execv error.n\n");
+			}		
+			//final stage of pipeline -set stdin be the read end of the previous pipe 
+			//and output to the original file descriptor 1
+			if(in !=0) {dup2(in, 0);}
+			
+			//create final isntruction 
+			index = 0;
+			cmd = nullify(cmd);
+			for(counter = begin; pipeBay[counter] != NULL; counter++) {
+				cmd[index++] = pipeBay[counter];
+			}
+			printf("final command: %s\n", cmd[0]);
+			
+			//execute final instruction
+			execv(cmd[0], cmd); 
+			printf("Return not expected. Must be an execv error.n\n");
 			return NULL;
 		}
-		//change directory 
-		if(strncmp(cmd[0], "cd", 2) == 0) {
-			(*builtin_func2[i])(cmd); 
-			return NULL;
-		}
-		//manupulate cmd** and start timer 
-		if(strncmp(cmd[0], "etime", 5) == 0) {
-			(*builtin_func3[i])(cmd, 1, start); 
-			gettimeofday(&start, NULL);
-		}
-		//io
-		if(strncmp(cmd[0], "io", 2) == 0) {
-			//printf("IO detected\n");
-			(*builtin_func4[i])(cmd, 0); 
-		}
+	
+	//child 
+	else {
+    if (pid=fork() == 0) {
 		
-	}
+			
+		
+		//determine redirect values 
+		//if not redirect, helper function 
+		//will know and ignore 
+		fd = redirectHelper(cmd, 0);
+		j = redirectHelper(cmd, 1);
+		redirectFlag = redirectHelper(cmd, 2);  
 	
-	
-    if ((pid = fork()) == -1) {
-		perror("fork error");
-	}
-       
-    else if (pid == 0) {
+		//input redirection
+		if(redirectFlag == 1)
+		{
+			cmd = inputRedirect(cmd, j);
+			close(STDIN_FILENO);
+			dup2(fd, 1);
+			dup2(fd, 2);
+			close(fd);
+		}
+		//output redirection 
+		else if (redirectFlag == 2)
+		{	 
+			read(fd, buffer, 255); 
+			b = newLineRemove(b);
+			cmd = outputRedirect(cmd, b, j);
+		}
+		//execute commads 
 		execv(cmd[0], cmd);
         printf("Return not expected. Must be an execv error.n\n");
     }
 	else {
-		waitpid(pid, &status, 0);
+		if(pipeFlag == 0) {//wait for child 
+		waitpid(pid, &status, 0);} 
 		
-		//stop etime timer and print time lapse 
-		if(strncmp(c, "etime", 5) == 0) {
-			(*builtin_func3[i])(cmd, 0, start); 
-		}
+		if(redirectFlag == 1) {close(fd);}
+		//if(pipeFlag == 1) {
+			
+			//printf("Pipe flag raised\n");
+			//char buffer[255];
+			//close the write end of the pipe in the parent
+			//close(pipefd[1]); 
+			
+			//while(read(pipefd[0], buffer, sizeof(buffer)) != 0) {}
+			//printf("buffer: %s\n", buffer);
+		//}
 		
-		//build path to pid/io and read file 
-		if(strncmp(c, "io", 2) == 0) {
-			(*builtin_func4[i])(cmd, 1); 
-		}		
+		
+		//facilitates closing phase of builtins 
+		land = builtinLander(c, cmd, start); 
 	}
 	return NULL;
+	}
 }
-
-
