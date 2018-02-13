@@ -27,7 +27,8 @@ typedef union
        unsigned int pipeIn     : 1;
        unsigned int pipeOut    : 1;
        unsigned int bg         : 1;
-       unsigned int unassigned : 27; // subtract when adding new flag
+       unsigned int empty      : 1;
+       unsigned int unassigned : 26; // subtract when adding new flag
     } Flags;
 } BITFLAGS;
 
@@ -85,6 +86,7 @@ int reactorLoop (BITFLAGS *f) {
     int i = 0;
 	
     while(true) {
+        f->Flags.empty = false;
 		user = getenv("USER");
 		machine = getenv("MACHINE");
 		path = getenv("PWD");
@@ -167,7 +169,7 @@ char * getCommands (char* saved, BITFLAGS *f) {
     
     if (saved[0] == '\0') {
         temp[0] = '\0';
-        
+        f->Flags.empty = true;
         return temp;
     }
     
@@ -466,7 +468,8 @@ char ** parseArguments(char *line, BITFLAGS *f)
 			}
 		}	
 	}	
-	bucket[k] = '\0';		
+	bucket[k] = '\0';	
+	
 	return bucket;
 }
 
@@ -575,7 +578,10 @@ char * parentDirBuilder(char * path, BITFLAGS *f)
 	strncpy(parentPath, currPath, nlength); 
 	strcat(parentPath, path+2);
 	
-	if(pathExist(parentPath)) {return parentPath;} 
+	if(pathExist(parentPath)) {
+	    return parentPath;
+	}
+	 
 	return NULL; 
 }
 
@@ -605,12 +611,16 @@ char * envPathAmmend(char * path, char * envVar, BITFLAGS *f)
 	char *currPath = getenv(envVar); 
 	int keyword = strlen(envVar) + 1; 
 	int length = strlen(currPath) + (strlen(path)-keyword);
-	char *newPath = malloc(sizeof(char*) * length); 
+	char *newPath = malloc(sizeof(char*) * length);
 	
 	strcpy(newPath, currPath);
 	strcat(newPath, path+keyword);
 	
-	if(pathExist(newPath)) {return newPath;}
+	if(pathExist(newPath)) {
+	    free(path);
+	    return newPath;
+	}
+	
 	return NULL; 
 }
 
@@ -659,6 +669,8 @@ char * getEnvironment(const char *path)
 //returns expanded argument, does nothing in many cases (determined by is_command)
 char * expandPath(char *path, int cmd_p, BITFLAGS *f)
 {	
+    char* newpath;
+    
 	if ( f->Flags.testing == true) {
 		printf("Expanding path...\n"); 
 	}
@@ -672,32 +684,42 @@ char * expandPath(char *path, int cmd_p, BITFLAGS *f)
 	}
 	//for other built-ins
 	if(cmd_p == 3) {
-		path = expandBuiltIn(path, f);
+		newpath = expandBuiltIn(path, f);
+		free(path);
+		path = newpath;
 		return path; 
 	}
 	//for arguments
 	if(cmd_p == 0) {
 		if(contains(path, '$')) {
 			if(strcmp(path, "$USER") == 0) {char *q = getUser(); return q; }
-			path = envPathAmmend(path, getEnvironment(path), f); 
+			newpath = envPathAmmend(path, getEnvironment(path), f);
+			free(path);
+			path = newpath; 
 			if(pathExist(path)) {return path;}
 			else {printf("path does not exists\n"); return NULL;}
 		}
 		if(contains(path, '~')) {
-			path = homePathBuilder(path, f);
+			newpath = homePathBuilder(path, f); // memleak fix [-1, +2]
+			free(path);
+			path = newpath;
 			if(pathExist(path)) {return path;}
 			else{printf("path does not exists\n"); return NULL;}
 		}
 		if(contains(path, '.')) { 
 			//expand parent directory 
 			if(path[0] == '.' && path[1] == '.') {
-				path = parentDirBuilder(path, f);
+				newpath = parentDirBuilder(path, f);
+				free(path);
+			    path = newpath;
 				if(pathExist(path)) {return path;}
 				else {printf("path does not exists\n"); return NULL;}
 			}
 			//expand current working directoy
 			if(path[0] == '.') {
-				path = currentDirPathBuilder(path, f);
+				newpath = currentDirPathBuilder(path, f);
+				free(path);
+			    path = newpath;
 				if(pathExist(path)) {return path;}
 				else {printf("path does not exists\n"); return NULL;}
 			}
@@ -1109,7 +1131,7 @@ int redirectHelper(char **cmd, int val)
 			if(val == 2) {return 2;}
 		}
 	}
-		
+
 	if(fd == -1) {printf("Error\n"); return -1;}
 	else{return fd;}
 }	
