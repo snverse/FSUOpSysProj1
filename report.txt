@@ -30,7 +30,6 @@ Steps taken to solve problem:
 17. Verbose testing of background porcesses 
 18. Implement zombie-termination
 19. Search for bugs
-20. Completed. 
 
 =============================
 Assumptions:
@@ -115,21 +114,28 @@ Nicholas Kelton
 	-testing 
 
 Davis Phillips
+	-tesing 
 	-taking input
-	-bitflag testing 
+	-bitflags 
 	-prompt
 	-piping
+	-memory allocation
+	-control flow
 	
 Bryce Vokus
-	-
+	-tesing 
+	-debugging 
+	-builtin functions
+	-piping
+	-background processes 
 	
 ===============================================
 Slack Days Used:
 ===============================================
 
 Nicholas Kelton: too many 
-Davis Phillips: 
-Bryce Vokus: 
+Davis Phillips: too many
+Bryce Vokus: 	too many
 
 ================================================
 Log:
@@ -184,26 +190,20 @@ Log:
 -implment i/o redirection 
 
 1/11/18
--tesing 
+-testing 
 -implement piping 
 -implement background process
 -search and remedy remaining bugs and errors
 
 1/12/18
--project complete 
+-tesing
+-plug memory leaks  
+-implement piping 
+-implement background process
+-search and remedy remaining bugs and errors - exit command doesn't hang after invalid argument is entered  
 
 ================================
 Questions
 ================================
 
-
-
-
-
-
-
-
-
- 
-	
-	
+(1) 	

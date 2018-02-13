@@ -477,7 +477,7 @@ char ** resolvePaths(char **args, BITFLAGS *f)
 	int i = 0;
 	for(; args[i] != NULL; i++) {
 		args[i] = expandPath(args[i], isCommand(args, i, f), f); 
-		printf("ARGS[%i]: %s\n", i, args[i]);
+		//printf("ARGS[%i]: %s\n", i, args[i]);
 	}
 	return args;
 }
@@ -495,7 +495,7 @@ int isCommand(char **args, int i, BITFLAGS *f)
 	
 	if(strcmp(args[i], "cd") == 0) {return 2;}
 	
-	if(c != NULL && !isSpecialChar(args[i][0]) && strcmp(args[i], "echo") != 0 && 
+	if(c != NULL && !isSpecialChar(args[i][0]) /*&& strcmp(args[i], "echo") != 0*/ && 
 		args[i][0] != '.' && args[i][0] != '~') {return 3;}
 	
 	if(*args[i] == '>' || 
@@ -612,7 +612,6 @@ char * envPathAmmend(char * path, char * envVar, BITFLAGS *f)
 	strcat(newPath, path+keyword);
 	
 	if(pathExist(newPath)) {
-	    free(path);
 	    return newPath;
 	}
 	
@@ -822,7 +821,7 @@ bool isDir(const char *path)
 
 //list of builtin commands and corresponding functions
 char *builtin_cmd[] = {
-	"echo",
+	//"echo",
 	"cd",
 	"etime",
 	"exit",
@@ -929,7 +928,7 @@ int io_lsh(char **args, int flag)
 	}
 	return 1;
 }
-
+/*
 void echo_lsh(char **args)
 {
 	char output[1025];
@@ -951,6 +950,7 @@ void echo_lsh(char **args)
 	
 	printf("%s\n", o); 
 }
+*/
 
 //exit function 
 int exit_lsh(char **args)
@@ -974,11 +974,11 @@ int (*builtin_func3[]) (char **, int, struct timeval) = {
 int (*builtin_func4[]) (char **, int) = {
 	&io_lsh
 };
-
+/*
 int (*builtin_func5[]) (char **) = {
 	&echo_lsh
 };
-
+*/
 int getNumBuiltIns()
 {
 	return sizeof(builtin_cmd) / sizeof(char*); 
@@ -1071,11 +1071,14 @@ int builtinLauncher(char ** cmd, struct timeval start)
 			(*builtin_func4[i])(cmd, 0); 
 			return 2;
 		}
+		
+		/*
 		//echo 
 		else if(strncmp(cmd[0], "echo", 4) == 0) {
 			(*builtin_func5[i])(cmd);
 			return 3; 
 		}
+		*/
 	}
 	
 	return 0;
@@ -1160,7 +1163,7 @@ bool pipeScan(char ** args, BITFLAGS *f)
 //execute commmands 
 char ** executeCommands(char **cmd, BITFLAGS*f)
 {
-	printf("Executing...\n");
+	if(f->Flags.testing) {printf("Executing Commands...\n");}
 	
 	pid_t pid;
 	int status; 
@@ -1212,27 +1215,29 @@ char ** executeCommands(char **cmd, BITFLAGS*f)
 				
 			printf("This is a pipe!\n");
 				
-			//close reading end in the child
-			close(pipefd[0]); 
-			dup2(pipefd[1], 1);
-			dup2(pipefd[1], 2);
-			close(pipe[1]); 
-			
-			
-			//last argument 
-			//if(f->Flags.empty) { 
-				//send stdout to the pipe 
-				//dup2(pipefd[1], 1);
-				//send stder to the pipe
-				//dup2(pipefd[1], 2);
-				//close(pipefd[1]); 
+			//first instance of pipe 
+			if(pipeFlag == 0) {
+				close(pipefd[0]); 
+				dup2(pipefd[1], 1);
+				dup2(pipefd[1], 2);
+				close(pipefd[1]);
+				pipeFlag = 1;
+			}
+			//second instance of pipe
+			if(pipeFlag == 1) {
+				//faciliate 
+				pipeFlag = 2;
+			}
+			//third instance of pipe 
+			if(pipeFlag == 2) {
 				
-			pipeFlag = 1; 
-			//}
+				pipeFlag = 3; 
+			}
 		}
 			//execute commads 
 			execv(cmd[0], cmd);
-			printf("Return not expected. Must be an execv error.n\n");
+			printf("Execution Failed. Please try again.\n");
+			exit(1);
 	}
 	//parent
 	else {
@@ -1241,24 +1246,26 @@ char ** executeCommands(char **cmd, BITFLAGS*f)
 		//handle redirect
 		if(redirectFlag == 1) {close(fd);}
 			
-			//handle piping 
-			if(pipeFlag == 1) {
+		//handle piping 
+		if(pipeFlag > 0) {
 				
-				printf("Pipe flag raised\n");
+			printf("Pipe flag raised\n");
 				
-				//final command 
-				if(f->Flags.empty) {
-					
-				}
-				
-				//intermiterary command 
-				else {
-					
-				}
+			//final command 
+			if(f->Flags.empty) {
+				close(pipefd[1]);
+				dup2(pipefd[0], 0);
+				close(pipefd[0]); 
 			}
+				
+			//intermiterary command 
+			else {
+				printf("I'm the middle man\n");	
+			}
+		}
 		
 		//facilitates closing phase of builtins 
-		land = builtinLander(c, cmd, start); 
+		land = builtinLander(cmd[0], cmd, start); 
 	}
 	return NULL;
 }
