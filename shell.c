@@ -915,12 +915,14 @@ int io_lsh(char **args, int flag)
 
 void echo_lsh(char **args)
 {
-	char output[1024];
+	char output[1025];
 	char * o = output; 
 	int i = 1;
 	int j = 0;
 	int k = 0;
 	
+	
+	printf("printing in echo\n");
 	//copy argument char ** into single char * 
 	for(; args[i] != NULL; i++) {
 		//printf("args[%]: %s\n", i, args[i]);
@@ -930,11 +932,12 @@ void echo_lsh(char **args)
 	}
 	output[k] = '\0';
 	
+	/*
 	int p = 0;
 	for(; p < k; p++) {
 		printf("echo[%i]: %s\n", p, output[p]);  
 	}
-	
+	*/
 	printf("%s\n", o); 
 }
 
@@ -1060,6 +1063,7 @@ int builtinLauncher(char ** cmd, struct timeval start)
 		//echo 
 		else if(strncmp(cmd[0], "echo", 4) == 0) {
 			(*builtin_func5[i])(cmd);
+			return 3; 
 		}
 	}
 	
@@ -1097,7 +1101,7 @@ int redirectHelper(char **cmd, int val)
 	for(; cmd[j] != NULL; j++) {
 		if(contains(cmd[j], '>')) {
 			path2File = cmd[j+1];//getFile(cmd[j+1]);
-			printf("path2File: %s\n", path2File); 
+			//printf("path2File: %s\n", path2File); 
 			fd = open(path2File, O_WRONLY | O_TRUNC | O_CREAT, 0644);
 			if(val == 1) {return j;}
 			if(val == 2) {return 1;}
@@ -1289,6 +1293,7 @@ char ** executeCommands(char **cmd, BITFLAGS*f)
 	//if not a builtin
 	if(launch  == -1) {return NULL;}
 	
+	if(launch == 3) {return NULL;}
 	/*
 	//check if piping 
 	if(pipeScan(cmd, f)) {
